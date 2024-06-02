@@ -56,6 +56,17 @@ Debug 时发现前面的 `bitmap` 爆了，没有初始化，数据大之后会�
 
 `buffer/lru_replacer`
 
+- Replacer 用链表完成。几个功能：Victim 表尾，Pin 出表，Unpin 入表，Size。
+
 ### Buffer Pool
 
 `buffer/buffer_pool_manager`
+
+- 已有函数：
+    - 构造：页的数组，replacer，把所有页都放入 free list
+    - 析构：flush 写回所有页
+    - Allocate、Deallocate、IsFree 全都直接向 DiskManager 申请（？！
+- 读一下内存页 `Page`，和计组的缓存结构差不多。
+
+`UnpinPage` 的 `is_dirty` 不知道干什么用的。
+

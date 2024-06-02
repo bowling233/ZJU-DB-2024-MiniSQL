@@ -23,6 +23,13 @@ class Page {
   /** Constructor. Zeros out the page data. */
   Page() { ResetMemory(); }
 
+  void ResetPage() {
+    ResetMemory();
+    page_id_ = INVALID_PAGE_ID;
+    pin_count_ = 0;
+    is_dirty_ = false;
+  }
+
   /** Default destructor. */
   ~Page() = default;
 

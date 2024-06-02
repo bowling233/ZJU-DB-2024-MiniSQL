@@ -24,6 +24,12 @@ class BufferPoolManager {
 
   bool FlushPage(page_id_t page_id);
 
+  /**
+   * @brief Create a new page in the page file
+   * 
+   * @param page_id  page id of the new page. INVALID_PAGE_ID if fail to create
+   * @return Page* pointer to the page. nullptr if buffer pool is full
+   */
   Page *NewPage(page_id_t &page_id);
 
   bool DeletePage(page_id_t page_id);
