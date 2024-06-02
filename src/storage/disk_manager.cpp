@@ -74,10 +74,10 @@ page_id_t DiskManager::AllocatePage() {
     // Write the updated bitmap page
     WritePhysicalPage(bitmap_page_id, reinterpret_cast<char *>(&bitmap_page));
     page_id_t logical_page_id = extent * BITMAP_SIZE + page_id_in_extent;
-    // Set the page to zero
-    char page_data[PAGE_SIZE];
-    memset(page_data, 0, PAGE_SIZE);
-    WritePage(logical_page_id, page_data);
+    // (buffer will always set zero when creating page) Set the page to zero
+    // char page_data[PAGE_SIZE];
+    // memset(page_data, 0, PAGE_SIZE);
+    // WritePage(logical_page_id, page_data);
     // Update meta page
     meta_page->num_allocated_pages_++;
     meta_page->extent_used_page_[extent]++;
@@ -97,10 +97,10 @@ page_id_t DiskManager::AllocatePage() {
   uint32_t bitmap_page_id = 1 + new_extent * (BITMAP_SIZE + 1);
   WritePhysicalPage(bitmap_page_id, reinterpret_cast<char *>(&bitmap_page));
   page_id_t logical_page_id = new_extent * BITMAP_SIZE + page_id_in_extent;
-  // Set the page to zero
-  char page_data[PAGE_SIZE];
-  memset(page_data, 0, PAGE_SIZE);
-  WritePage(logical_page_id, page_data);
+  // (buffer will always set zero when creating page) Set the page to zero
+  // char page_data[PAGE_SIZE];
+  // memset(page_data, 0, PAGE_SIZE);
+  // WritePage(logical_page_id, page_data);
   // Update meta page
   meta_page->extent_used_page_[new_extent] = 1;
   meta_page->num_extents_++;
