@@ -36,7 +36,9 @@ class LRUReplacer : public Replacer {
   size_t Size() override;
 
 private:
-  // add your own private member variables here
+  size_t num_pages_;
+  list<frame_id_t> lru_list_;
+  unordered_set<frame_id_t> lru_set_;
 };
 
 #endif  // MINISQL_LRU_REPLACER_H
