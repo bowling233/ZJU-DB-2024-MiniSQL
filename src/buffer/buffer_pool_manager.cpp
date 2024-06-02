@@ -63,9 +63,7 @@ frame_id_t BufferPoolManager::TryToFindFreePage() {
   if (!replacer_->Victim(&frame_id)) {
     return INVALID_PAGE_ID;
   }
-  if (pages_[frame_id].IsDirty()) {
-    disk_manager_->WritePage(pages_[frame_id].GetPageId(), pages_[frame_id].GetData());
-  }
+  FlushPage(pages_[frame_id].GetPageId());
   page_table_.erase(pages_[frame_id].GetPageId());
 }
 
@@ -108,10 +106,7 @@ bool BufferPoolManager::DeletePage(page_id_t page_id) {
   //    its metadata and return it to the free list.
   else {
     UnpinPage(page_id, false);
-    pages_[page_table_[page_id]].ResetMemory();
-    pages_[page_table_[page_id]].page_id_ = INVALID_PAGE_ID;
-    pages_[page_table_[page_id]].pin_count_ = 0;
-    pages_[page_table_[page_id]].is_dirty_ = false;
+    pages_[page_table_[page_id]].ResetPage();
     free_list_.emplace_back(page_table_[page_id]);
     page_table_.erase(page_id);
   }

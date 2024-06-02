@@ -29,7 +29,7 @@
 ### 数据页
 
 - [x] `page/disk_file_meta_page`
-- [ ] `storage/disk_manager`
+- [x] `storage/disk_manager`
 
 位图页+数据页一起放在一个文件中：
 
@@ -54,19 +54,22 @@ Debug 时发现前面的 `bitmap` 爆了，没有初始化，数据大之后会�
 
 ### LRU Buffer
 
-`buffer/lru_replacer`
+- [x] `buffer/lru_replacer`
 
 - Replacer 用链表完成。几个功能：Victim 表尾，Pin 出表，Unpin 入表，Size。
 
 ### Buffer Pool
 
-`buffer/buffer_pool_manager`
+- [x] `buffer/buffer_pool_manager`
 
 - 已有函数：
     - 构造：页的数组，replacer，把所有页都放入 free list
     - 析构：flush 写回所有页
     - Allocate、Deallocate、IsFree 全都直接向 DiskManager 申请（？！
 - 读一下内存页 `Page`，和计组的缓存结构差不多。
+- 感觉写的过程中 frame 和 pages 的状态还没有完全搞清楚，可能有数据没有重置清楚之类的，不知道后面会不会爆
 
-`UnpinPage` 的 `is_dirty` 不知道干什么用的。
+## 6.3 Record Manager
+
+### 概念
 
