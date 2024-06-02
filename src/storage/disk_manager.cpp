@@ -47,33 +47,113 @@ void DiskManager::WritePage(page_id_t logical_page_id, const char *page_data) {
   WritePhysicalPage(MapPageId(logical_page_id), page_data);
 }
 
-/**
- * TODO: Student Implement
- */
 page_id_t DiskManager::AllocatePage() {
-  ASSERT(false, "Not implemented yet.");
-  return INVALID_PAGE_ID;
+  DiskFileMetaPage *meta_page = reinterpret_cast<DiskFileMetaPage *>(meta_data_);
+  // DLOG(INFO) << "Meta page: " << meta_page->num_allocated_pages_ << " " << meta_page->num_extents_ << std::endl;
+  if (meta_page->num_allocated_pages_ >= MAX_VALID_PAGE_ID && meta_page->num_extents_ >= MAX_EXTENT_NUMS) {
+    LOG(ERROR) << "No enough space for new page." << std::endl;
+    return INVALID_PAGE_ID;
+  }
+  // Find free page among existing extents
+  // May be improved
+  for (uint32_t extent = 0; extent < meta_page->GetExtentNums(); extent++) {
+    //DLOG(INFO) << "Extent " << extent << " used pages: " << meta_page->extent_used_page_[extent] << std::endl;
+    if (meta_page->extent_used_page_[extent] >= BITMAP_SIZE) {
+      continue;
+    }
+    // Read the bitmap page
+    page_id_t bitmap_page_id = 1 + extent * (BITMAP_SIZE + 1);
+    BitmapPage<PAGE_SIZE> bitmap_page;
+    ReadPhysicalPage(bitmap_page_id, reinterpret_cast<char *>(&bitmap_page));
+    // Find and allocate a free page
+    uint32_t page_id_in_extent;
+    if (!bitmap_page.AllocatePage(page_id_in_extent)) {
+      LOG(ERROR) << "Failed to allocate page in extent " << extent << std::endl;
+      throw std::exception();
+    }
+    // Write the updated bitmap page
+    WritePhysicalPage(bitmap_page_id, reinterpret_cast<char *>(&bitmap_page));
+    page_id_t logical_page_id = extent * BITMAP_SIZE + page_id_in_extent;
+    // Set the page to zero
+    char page_data[PAGE_SIZE];
+    memset(page_data, 0, PAGE_SIZE);
+    WritePage(logical_page_id, page_data);
+    // Update meta page
+    meta_page->num_allocated_pages_++;
+    meta_page->extent_used_page_[extent]++;
+    return logical_page_id;
+  }
+  // DLOG(INFO) << "Create new extent" << std::endl;
+  // Not found in existing extents, create a new extent
+  uint32_t new_extent = meta_page->GetExtentNums();
+  // Create bitmap page for new extent
+  BitmapPage<PAGE_SIZE> bitmap_page;
+  uint32_t page_id_in_extent;
+  if (!bitmap_page.AllocatePage(page_id_in_extent)) {
+    LOG(ERROR) << "Failed to allocate page in new extent " << new_extent << std::endl;
+    throw std::exception();
+  }
+  // Write the new bitmap page
+  uint32_t bitmap_page_id = 1 + new_extent * (BITMAP_SIZE + 1);
+  WritePhysicalPage(bitmap_page_id, reinterpret_cast<char *>(&bitmap_page));
+  page_id_t logical_page_id = new_extent * BITMAP_SIZE + page_id_in_extent;
+  // Set the page to zero
+  char page_data[PAGE_SIZE];
+  memset(page_data, 0, PAGE_SIZE);
+  WritePage(logical_page_id, page_data);
+  // Update meta page
+  meta_page->extent_used_page_[new_extent] = 1;
+  meta_page->num_extents_++;
+  meta_page->num_allocated_pages_++;
+  return logical_page_id;
 }
 
-/**
- * TODO: Student Implement
- */
 void DiskManager::DeAllocatePage(page_id_t logical_page_id) {
-  ASSERT(false, "Not implemented yet.");
+  DiskFileMetaPage *meta_page = reinterpret_cast<DiskFileMetaPage *>(meta_data_);
+  if (logical_page_id >= MAX_VALID_PAGE_ID) {
+    LOG(ERROR) << "Invalid page id: " << logical_page_id << std::endl;
+    throw std::out_of_range("Invalid page id");
+  }
+  // Read the bitmap page
+  page_id_t bitmap_page_id = 1 + (logical_page_id / BITMAP_SIZE) * (BITMAP_SIZE + 1); // = 1 + extent_num * (BITMAP_SIZE + 1)
+  BitmapPage<PAGE_SIZE> bitmap_page;
+  ReadPhysicalPage(bitmap_page_id, reinterpret_cast<char *>(&bitmap_page));
+  // Deallocate the page
+  uint32_t page_id_in_extent = logical_page_id % BITMAP_SIZE;
+  if (!bitmap_page.DeAllocatePage(page_id_in_extent)) {
+    LOG(ERROR) << "Failed to deallocate page " << logical_page_id << std::endl;
+    throw std::exception();
+  }
+  // Write the updated bitmap page
+  WritePhysicalPage(bitmap_page_id, reinterpret_cast<char *>(&bitmap_page));
+  // Update meta page
+  meta_page->num_allocated_pages_--;
+  meta_page->extent_used_page_[logical_page_id / BITMAP_SIZE]--;
 }
 
-/**
- * TODO: Student Implement
- */
 bool DiskManager::IsPageFree(page_id_t logical_page_id) {
-  return false;
+  DiskFileMetaPage *meta_page = reinterpret_cast<DiskFileMetaPage *>(meta_data_);
+  if (logical_page_id >= MAX_VALID_PAGE_ID) {
+    LOG(ERROR) << "Invalid page id: " << logical_page_id << std::endl;
+    throw std::out_of_range("Invalid page id");
+  }
+  // Read the bitmap page
+  page_id_t bitmap_page_id = 1 + (logical_page_id / BITMAP_SIZE) * (BITMAP_SIZE + 1);
+  BitmapPage<PAGE_SIZE> bitmap_page;
+  ReadPhysicalPage(bitmap_page_id, reinterpret_cast<char *>(&bitmap_page));
+  // Check if the page is free
+  uint32_t page_id_in_extent = logical_page_id % BITMAP_SIZE;
+  bool is_free = bitmap_page.IsPageFree(page_id_in_extent);
+  return is_free;
 }
 
-/**
- * TODO: Student Implement
- */
 page_id_t DiskManager::MapPageId(page_id_t logical_page_id) {
-  return 0;
+  if (logical_page_id >= MAX_VALID_PAGE_ID) {
+    LOG(ERROR) << "Invalid page id: " << logical_page_id << std::endl;
+    throw std::out_of_range("Invalid page id");
+  }
+  page_id_t extent = logical_page_id / BITMAP_SIZE;
+  return 1 + logical_page_id + (1 + extent);
 }
 
 int DiskManager::GetFileSize(const std::string &file_name) {
@@ -86,9 +166,7 @@ void DiskManager::ReadPhysicalPage(page_id_t physical_page_id, char *page_data) 
   int offset = physical_page_id * PAGE_SIZE;
   // check if read beyond file length
   if (offset >= GetFileSize(file_name_)) {
-#ifdef ENABLE_BPM_DEBUG
-    LOG(INFO) << "Read less than a page" << std::endl;
-#endif
+    // LOG(INFO) << "Read less than a page, physical page id:" << physical_page_id << std::endl;
     memset(page_data, 0, PAGE_SIZE);
   } else {
     // set read cursor to offset
@@ -97,9 +175,7 @@ void DiskManager::ReadPhysicalPage(page_id_t physical_page_id, char *page_data) 
     // if file ends before reading PAGE_SIZE
     int read_count = db_io_.gcount();
     if (read_count < PAGE_SIZE) {
-#ifdef ENABLE_BPM_DEBUG
       LOG(INFO) << "Read less than a page" << std::endl;
-#endif
       memset(page_data + read_count, 0, PAGE_SIZE - read_count);
     }
   }

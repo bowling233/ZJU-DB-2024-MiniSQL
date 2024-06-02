@@ -3,46 +3,50 @@
 #include "glog/logging.h"
 
 /**
-   * @param page_offset Index in extent of the page allocated.
-   * @return true if successfully allocate a page.
-   */
+ * @param page_offset Index in extent of the page allocated.
+ * @return true if successfully allocate a page.
+ */
 template <size_t PageSize>
 bool BitmapPage<PageSize>::AllocatePage(uint32_t &page_offset) {
+  // DLOG(INFO) << "Page Status: " << "page_allocated_ = " << page_allocated_ << ", next_free_page_ = " << next_free_page_ << std::endl;
   // Check if free page left
   if (next_free_page_ >= GetMaxSupportedSize()) {
+    // LOG(INFO) << "No free page left" << std::endl;
     return false;
   }
-  // Allocate next free page
   uint32_t byte_index = next_free_page_ / 8;
   uint8_t bit_index = next_free_page_ % 8;
-  ASSERT(IsPageFreeLow(byte_index, bit_index), "Page is not free");
+  // Allocate next free page
   bytes[byte_index] |= (1 << bit_index);
   page_offset = next_free_page_;
+  // DLOG(INFO) << "Allocate page " << page_offset << std::endl;
   // Find next free page
   page_allocated_++;
-  if(page_allocated_ == GetMaxSupportedSize()) {
+  if (page_allocated_ == GetMaxSupportedSize()) {
     next_free_page_ = GetMaxSupportedSize();
     return true;
   }
   do {
     next_free_page_ = (next_free_page_ + 1) % GetMaxSupportedSize();
     if (IsPageFree(next_free_page_)) {
-      break;
+      return true;
     }
+    // DLOG(INFO) << "Next free page not free: " << next_free_page_ << std::endl;
   } while (next_free_page_ != page_offset);
-  // If all pages are allocated, set next_free_page_ to GetMaxSupportedSize()
-  if (next_free_page_ == page_offset) {
-    next_free_page_ = GetMaxSupportedSize();
-  }
-  return true;
+  // DEBUG: This should not happen
+  // DLOG(ERROR) << "Error: No free page left" << std::endl;
+  throw std::exception();
 }
 
 template <size_t PageSize>
 bool BitmapPage<PageSize>::DeAllocatePage(uint32_t page_offset) {
-  ASSERT(page_offset < GetMaxSupportedSize(), "Page offset is out of range");
+  if(page_offset >= GetMaxSupportedSize()) {
+    LOG(ERROR) << "Page offset is out of range" << std::endl;
+    throw std::out_of_range("Page offset is out of range");
+  }
   // Check if page is already free
   if (IsPageFree(page_offset)) {
-    DLOG(INFO) << "Page is already free" << std::endl;
+    // LOG(INFO) << "Page is already free" << std::endl;
     return false;
   }
   // De-allocate page
@@ -60,19 +64,19 @@ bool BitmapPage<PageSize>::DeAllocatePage(uint32_t page_offset) {
 template <size_t PageSize>
 bool BitmapPage<PageSize>::IsPageFree(uint32_t page_offset) const {
   if (page_offset >= GetMaxSupportedSize()) {
-    return IsPageFreeLow(page_offset / 8, page_offset % 8);
+    LOG(ERROR) << "Page offset is out of range" << std::endl;
+    throw std::out_of_range("Page offset is out of range");
   }
-  LOG(INFO) << "Page offset is out of range" << std::endl;
-  return false;
+  return IsPageFreeLow(page_offset / 8, page_offset % 8);
 }
 
 /**
-   * check a bit(byte_index, bit_index) in bytes is free(value 0).
-   *
-   * @param byte_index value of page_offset / 8
-   * @param bit_index value of page_offset % 8
-   * @return true if a bit is 0, false if 1.
-   */
+ * check a bit(byte_index, bit_index) in bytes is free(value 0).
+ *
+ * @param byte_index value of page_offset / 8
+ * @param bit_index value of page_offset % 8
+ * @return true if a bit is 0, false if 1.
+ */
 template <size_t PageSize>
 bool BitmapPage<PageSize>::IsPageFreeLow(uint32_t byte_index, uint8_t bit_index) const {
   return !((bytes[byte_index]) & (1 << bit_index));
