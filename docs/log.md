@@ -71,5 +71,17 @@ Debug 时发现前面的 `bitmap` 爆了，没有初始化，数据大之后会�
 
 ## 6.3 Record Manager
 
-### 概念
+- Record
+    - Column: name_, type_, len_, table_ind_, nullable_, unique_
+    - Schema: colums, is_manage
+    - Field: union, type_id, len, is_null, manage_data（？）
+    - Row：rid + fields
+
+### 序列化
+
+参考 `Field` 完成其它对象的：
+
+- SerializeTo: buf 指针向前推进了多少个字节。
+- DeserializeFrom
+- GetSerializedSize
 
