@@ -1,7 +1,5 @@
 #include "page/table_page.h"
 
-// TODO: Update interface implementation if apply recovery
-
 void TablePage::Init(page_id_t page_id, page_id_t prev_id, LogManager *log_mgr, Txn *txn) {
   memcpy(GetData(), &page_id, sizeof(page_id));
   SetPrevPageId(prev_id);
