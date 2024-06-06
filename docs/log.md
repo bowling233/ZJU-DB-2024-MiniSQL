@@ -129,3 +129,10 @@ Debug 时发现前面的 `bitmap` 爆了，没有初始化，数据大之后会�
 
 写 TableIterator 时，给的构造函数是 explicit 的，但拷贝构造通常不应该是。删去。迭代器的锁没懂怎么用。
 
+## 6.4 Index Manager
+
+- 基本结构文档已说明
+- GenericKey 的比较需要反序列化后调用比较函数。个人感觉效率极低，一般应当针对二进制模式进行优化。
+- 约定返回 size 的函数都表示指针的数量
+- GenericKey 和 KeyManager 接口很简单
+- 

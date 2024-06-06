@@ -7,9 +7,6 @@
 #define key_off 0
 #define val_off GetKeySize()
 
-/**
- * TODO: Student Implement
- */
 /*****************************************************************************
  * HELPER METHODS AND UTILITIES
  *****************************************************************************/
@@ -19,6 +16,13 @@
  * max page size
  */
 void InternalPage::Init(page_id_t page_id, page_id_t parent_id, int key_size, int max_size) {
+  SetPageType(IndexPageType::INTERNAL_PAGE);
+  SetSize(0);
+  SetPageId(page_id);
+  SetParentPageId(parent_id);
+  SetMaxSize(max_size == UNDEFINED_SIZE ? (PAGE_SIZE - INTERNAL_PAGE_HEADER_SIZE) / (GetKeySize() + sizeof(page_id_t)) : max_size);
+  SetKeySize(key_size);
+  SetLSN(INVALID_LSN);
 }
 /*
  * Helper method to get/set the key associated with input "index"(a.k.a
@@ -65,7 +69,23 @@ void InternalPage::PairCopy(void *dest, void *src, int pair_num) {
  * 用了二分查找
  */
 page_id_t InternalPage::Lookup(const GenericKey *key, const KeyManager &KM) {
-  return INVALID_PAGE_ID;
+  int l = 1, r = GetSize();
+  while (l < r) {
+    int mid = (l + r) / 2;
+    if (KM.CompareKeys(KeyAt(mid), key) <= 0) {
+      l = mid + 1;
+    } else {
+      r = mid;
+    }
+  }
+  return ValueAt(l - 1);
+  /*
+  int index = 1;
+  while(index < GetSize() && KM.CompareKeys(KeyAt(index), key) <= 0) {
+    index++;
+  }
+  DLOG(INFO) << "Lookup: " << index - 1;
+  return ValueAt(index - 1);*/
 }
 
 /*****************************************************************************
@@ -78,6 +98,10 @@ page_id_t InternalPage::Lookup(const GenericKey *key, const KeyManager &KM) {
  * NOTE: This method is only called within InsertIntoParent()(b_plus_tree.cpp)
  */
 void InternalPage::PopulateNewRoot(const page_id_t &old_value, GenericKey *new_key, const page_id_t &new_value) {
+  SetKeyAt(1, new_key);
+  SetValueAt(0, old_value);
+  SetValueAt(1, new_value);
+  SetSize(2);
 }
 
 /*
@@ -86,7 +110,13 @@ void InternalPage::PopulateNewRoot(const page_id_t &old_value, GenericKey *new_k
  * @return:  new size after insertion
  */
 int InternalPage::InsertNodeAfter(const page_id_t &old_value, GenericKey *new_key, const page_id_t &new_value) {
-  return 0;
+  auto size = GetSize();
+  int index = ValueIndex(old_value);
+  PairCopy(pairs_off + (index + 2) * pair_size, pairs_off + (index + 1) * pair_size, size - index - 1);
+  SetKeyAt(index + 1, new_key);
+  SetValueAt(index + 1, new_value);
+  SetSize(size + 1);
+  return size + 1;
 }
 
 /*****************************************************************************
@@ -97,6 +127,10 @@ int InternalPage::InsertNodeAfter(const page_id_t &old_value, GenericKey *new_ke
  * buffer_pool_manager 是干嘛的？传给CopyNFrom()用于Fetch数据页
  */
 void InternalPage::MoveHalfTo(InternalPage *recipient, BufferPoolManager *buffer_pool_manager) {
+  auto size = GetSize();
+  auto mid = size / 2;
+  recipient->CopyNFrom(pairs_off + mid * pair_size, size - mid, buffer_pool_manager);
+  SetSize(mid);
 }
 
 /* Copy entries into me, starting from {items} and copy {size} entries.
@@ -105,6 +139,14 @@ void InternalPage::MoveHalfTo(InternalPage *recipient, BufferPoolManager *buffer
  *
  */
 void InternalPage::CopyNFrom(void *src, int size, BufferPoolManager *buffer_pool_manager) {
+  auto old_size = GetSize();
+  PairCopy(pairs_off + size * pair_size, pairs_off, old_size);
+  PairCopy(pairs_off, src, size);
+  SetSize(old_size + size);
+  for (int i = 0; i < size; ++i) {
+    reinterpret_cast<BPlusTreePage *>(buffer_pool_manager->FetchPage(ValueAt(i))->GetData())->SetParentPageId(GetPageId());
+    buffer_pool_manager->UnpinPage(ValueAt(i), true);
+  }
 }
 
 /*****************************************************************************
@@ -116,6 +158,9 @@ void InternalPage::CopyNFrom(void *src, int size, BufferPoolManager *buffer_pool
  * NOTE: store key&value pair continuously after deletion
  */
 void InternalPage::Remove(int index) {
+  auto size = GetSize();
+  PairCopy(pairs_off + index * pair_size, pairs_off + (index + 1) * pair_size, size - index - 1);
+  SetSize(size - 1);
 }
 
 /*
@@ -123,7 +168,7 @@ void InternalPage::Remove(int index) {
  * NOTE: only call this method within AdjustRoot()(in b_plus_tree.cpp)
  */
 page_id_t InternalPage::RemoveAndReturnOnlyChild() {
-  return 0;
+  return ValueAt(0);
 }
 
 /*****************************************************************************
@@ -137,6 +182,11 @@ page_id_t InternalPage::RemoveAndReturnOnlyChild() {
  * pages that are moved to the recipient
  */
 void InternalPage::MoveAllTo(InternalPage *recipient, GenericKey *middle_key, BufferPoolManager *buffer_pool_manager) {
+  auto size = GetSize();
+  recipient->CopyNFrom(pairs_off, size, buffer_pool_manager);
+  recipient->SetKeyAt(size, middle_key);
+  recipient->SetSize(size + 1);
+  SetSize(0);
 }
 
 /*****************************************************************************
@@ -152,6 +202,8 @@ void InternalPage::MoveAllTo(InternalPage *recipient, GenericKey *middle_key, Bu
  */
 void InternalPage::MoveFirstToEndOf(InternalPage *recipient, GenericKey *middle_key,
                                     BufferPoolManager *buffer_pool_manager) {
+  recipient->CopyLastFrom(middle_key, ValueAt(0), buffer_pool_manager);
+  Remove(0);
 }
 
 /* Append an entry at the end.
@@ -159,6 +211,11 @@ void InternalPage::MoveFirstToEndOf(InternalPage *recipient, GenericKey *middle_
  * So I need to 'adopt' it by changing its parent page id, which needs to be persisted with BufferPoolManger
  */
 void InternalPage::CopyLastFrom(GenericKey *key, const page_id_t value, BufferPoolManager *buffer_pool_manager) {
+  SetKeyAt(GetSize(), key);
+  SetValueAt(GetSize(), value);
+  reinterpret_cast<BPlusTreePage *>(buffer_pool_manager->FetchPage(value)->GetData())->SetParentPageId(GetPageId());
+  buffer_pool_manager->UnpinPage(value, true);
+  SetSize(GetSize() + 1);
 }
 
 /*
@@ -170,6 +227,8 @@ void InternalPage::CopyLastFrom(GenericKey *key, const page_id_t value, BufferPo
  */
 void InternalPage::MoveLastToFrontOf(InternalPage *recipient, GenericKey *middle_key,
                                      BufferPoolManager *buffer_pool_manager) {
+  recipient->CopyFirstFrom(ValueAt(GetSize() - 1), buffer_pool_manager);
+  recipient->SetKeyAt(1, middle_key);
 }
 
 /* Append an entry at the beginning.
@@ -177,4 +236,7 @@ void InternalPage::MoveLastToFrontOf(InternalPage *recipient, GenericKey *middle
  * So I need to 'adopt' it by changing its parent page id, which needs to be persisted with BufferPoolManger
  */
 void InternalPage::CopyFirstFrom(const page_id_t value, BufferPoolManager *buffer_pool_manager) {
+  reinterpret_cast<BPlusTreePage *>(buffer_pool_manager->FetchPage(value)->GetData())->SetParentPageId(GetPageId());
+  PairCopy(pairs_off, pairs_off + pair_size, GetSize());
+  SetValueAt(0, value);
 }

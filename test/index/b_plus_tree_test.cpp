@@ -16,7 +16,7 @@ TEST(BPlusTreeTests, SampleTest) {
   };
   Schema *table_schema = new Schema(columns);
   KeyManager KP(table_schema, 16);
-  BPlusTree tree(0, engine.bpm_, KP);
+  BPlusTree tree(0, engine.bpm_, KP, 50, 50);
   TreeFileManagers mgr("tree_");
   // Prepare data
   const int n = 2000;
