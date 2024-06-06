@@ -23,8 +23,7 @@ void LeafPage::Init(page_id_t page_id, page_id_t parent_id, int key_size, int ma
   SetParentPageId(parent_id);
   SetPageType(IndexPageType::LEAF_PAGE);
   SetSize(0);
-  SetMaxSize(max_size == UNDEFINED_SIZE ? (PAGE_SIZE - LEAF_PAGE_HEADER_SIZE) / (GetKeySize() + sizeof(RowId))
-                                        : max_size);
+  SetMaxSize(max_size);
   SetKeySize(key_size);
   SetNextPageId(INVALID_PAGE_ID);
   SetLSN(INVALID_LSN);
@@ -134,6 +133,7 @@ void LeafPage::MoveHalfTo(LeafPage *recipient) {
 /*
  * Copy starting from items, and copy {size} number of elements into me.
  */
+// copy to the end, used by movehalfto(split) and moveallto(merge)
 void LeafPage::CopyNFrom(void *src, int size) {
   memcpy(pairs_off + GetSize() * pair_size, src, size * pair_size);
   IncreaseSize(size);
@@ -181,6 +181,7 @@ int LeafPage::RemoveAndDeleteRecord(const GenericKey *key, const KeyManager &KM)
  * Remove all key & value pairs from this page to "recipient" page. Don't forget
  * to update the next_page id in the sibling page
  */
+// recipient | node -> recipient
 void LeafPage::MoveAllTo(LeafPage *recipient) {
   recipient->CopyNFrom(pairs_off, GetSize());
   recipient->SetNextPageId(GetNextPageId());
