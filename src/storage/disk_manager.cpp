@@ -120,9 +120,10 @@ void DiskManager::DeAllocatePage(page_id_t logical_page_id) {
   ReadPhysicalPage(bitmap_page_id, reinterpret_cast<char *>(&bitmap_page));
   // Deallocate the page
   uint32_t page_id_in_extent = logical_page_id % BITMAP_SIZE;
-  if (!bitmap_page.DeAllocatePage(page_id_in_extent)) {
-    LOG(ERROR) << "Failed to deallocate page " << logical_page_id << std::endl;
-    throw std::exception();
+  auto double_free = !bitmap_page.DeAllocatePage(page_id_in_extent);
+  if(double_free) {
+    LOG(ERROR) << "Double free page " << logical_page_id << std::endl;
+    return;
   }
   // Write the updated bitmap page
   WritePhysicalPage(bitmap_page_id, reinterpret_cast<char *>(&bitmap_page));
