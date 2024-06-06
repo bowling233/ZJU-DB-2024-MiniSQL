@@ -109,6 +109,11 @@ uint32_t Column::DeserializeFrom(char *buf, Column *&column) {
   bool unique;
   memcpy(&unique, buf + offset, sizeof(bool));
   offset += sizeof(bool);
-  column = new Column(name, type, len, table_ind, nullable, unique);
+  //column = new Column(name, type, len, table_ind, nullable, unique);
+  if(type==kTypeChar){
+    column = new Column(name,type,len,table_ind,nullable,unique);
+  }else{
+    column = new Column(name,type,table_ind,nullable,unique);
+  }
   return offset;
 }

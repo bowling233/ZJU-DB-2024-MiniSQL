@@ -130,14 +130,10 @@ bool BufferPoolManager::FlushPage(page_id_t page_id) {
     DLOG(ERROR) << "Page not found in page table";
     return false;
   }
-  if (pages_[page_table_[page_id]].IsDirty()) {
-    disk_manager_->WritePage(page_id, pages_[page_table_[page_id]].GetData());
-  }
-  else {
-    DLOG(INFO) << "Page is not dirty";
-  }
+  disk_manager_->WritePage(page_id, pages_[page_table_[page_id]].GetData());
   return true;
 }
+
 
 page_id_t BufferPoolManager::AllocatePage() {
   int next_page_id = disk_manager_->AllocatePage();

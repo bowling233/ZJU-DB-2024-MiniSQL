@@ -14,7 +14,7 @@
 #include "concurrency/txn.h"
 #include "recovery/log_manager.h"
 
-class CatalogMeta {
+class CatalogMeta {//记录和管理这些表和索引的元信息被存储在哪个数据页中
   friend class CatalogManager;
 
  public:
