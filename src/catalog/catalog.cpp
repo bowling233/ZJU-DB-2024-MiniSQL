@@ -81,6 +81,7 @@ CatalogManager::CatalogManager(BufferPoolManager *buffer_pool_manager, LockManag
     for(auto it : catalog_meta_->table_meta_pages_){
       //对每一个表找到table_meta
       auto table_meta_page = buffer_pool_manager_->FetchPage(it.second);
+      buffer_pool_manager_->UnpinPage(it.second,true);
       TableMetadata *table_meta;
       TableMetadata::DeserializeFrom(table_meta_page->GetData(), table_meta);
       //加载table_names <std::string, table_id_t>
@@ -99,6 +100,7 @@ CatalogManager::CatalogManager(BufferPoolManager *buffer_pool_manager, LockManag
     for(auto it : catalog_meta_->index_meta_pages_){
       //对每一个索引找到index_meta
       auto index_meta_page = buffer_pool_manager_->FetchPage(it.second);
+      buffer_pool_manager_->UnpinPage(it.second,true);
       IndexMetadata *index_meta=nullptr;
       IndexMetadata::DeserializeFrom(index_meta_page->GetData(), index_meta);
       //加载index_names <std::string, std::unordered_map<std::string, index_id_t>>
@@ -117,7 +119,8 @@ CatalogManager::CatalogManager(BufferPoolManager *buffer_pool_manager, LockManag
     catalog_meta_ = CatalogMeta::NewInstance();
   }
   buffer_pool_manager->UnpinPage(CATALOG_META_PAGE_ID, true);
-  FlushCatalogMetaPage();
+  //buffer_pool_manager->UnpinPage(INDEX_ROOTS_PAGE_ID, true);
+  //FlushCatalogMetaPage();
 }
 
 CatalogManager::~CatalogManager() {
@@ -165,8 +168,8 @@ dberr_t CatalogManager::CreateTable(const string &table_name, TableSchema *schem
 
   next_table_id_++;
   //DLOG(INFO)<<"CreateTable pageid : "<<page_id<<endl;
-  buffer_pool_manager_->FlushPage(page_id);
-  FlushCatalogMetaPage();
+  //buffer_pool_manager_->FlushPage(page_id);
+  //FlushCatalogMetaPage();
   return DB_SUCCESS;
 }
 
@@ -248,8 +251,8 @@ dberr_t CatalogManager::CreateIndex(const std::string &table_name, const string 
   indexes_[next_index_id_] = index_info;
   next_index_id_++;
   //DLOG(INFO)<<"CreateIndex pageid : "<<page_id<<endl;
-  buffer_pool_manager_->FlushPage(page_id);
-  FlushCatalogMetaPage();
+  //buffer_pool_manager_->FlushPage(page_id);
+  //FlushCatalogMetaPage();
   return DB_SUCCESS;
 }
 
@@ -306,9 +309,9 @@ dberr_t CatalogManager::DropTable(const string &table_name) {
 
   page_id_t page_id = catalog_meta_->table_meta_pages_[table_id];
   catalog_meta_->table_meta_pages_.erase(table_id);
-
+  buffer_pool_manager_->UnpinPage(page_id,true);
   buffer_pool_manager_->DeletePage(page_id);
-  FlushCatalogMetaPage();
+  //FlushCatalogMetaPage();
   return DB_SUCCESS;
 }
 
@@ -331,9 +334,9 @@ dberr_t CatalogManager::DropIndex(const string &table_name, const string &index_
 
   page_id_t page_id = catalog_meta_->index_meta_pages_[index_id];
   catalog_meta_->index_meta_pages_.erase(index_id);
-
+  buffer_pool_manager_->UnpinPage(page_id,true);
   buffer_pool_manager_->DeletePage(page_id);
-  FlushCatalogMetaPage();
+  //FlushCatalogMetaPage();
   return DB_SUCCESS;
 }
 
@@ -343,7 +346,6 @@ dberr_t CatalogManager::DropIndex(const string &table_name, const string &index_
 dberr_t CatalogManager::FlushCatalogMetaPage() const {
   //flush page
   auto CatalogMetaPage = buffer_pool_manager_->FetchPage(CATALOG_META_PAGE_ID);
-  ASSERT(CatalogMetaPage != nullptr, "read catalog_meta_page failed!");
   catalog_meta_->SerializeTo(CatalogMetaPage->GetData());
   buffer_pool_manager_->UnpinPage(CATALOG_META_PAGE_ID, true);
   buffer_pool_manager_->FlushPage(CATALOG_META_PAGE_ID);
@@ -372,6 +374,7 @@ dberr_t CatalogManager::LoadTable(const table_id_t table_id, const page_id_t pag
   table_info->Init(table_meta, table_heap);
   tables_.emplace(table_id, table_info);
   //DLOG(INFO)<<"LoadTable pageid : "<<page_id<<endl;
+  buffer_pool_manager_->UnpinPage(page_id, true);
   return DB_SUCCESS;
 }
 
@@ -398,6 +401,7 @@ dberr_t CatalogManager::LoadIndex(const index_id_t index_id, const page_id_t pag
   index_info->Init(index_meta, table_info, buffer_pool_manager_);
   indexes_.emplace(index_id, index_info);
   //DLOG(INFO)<<"LoadIndex pageid : "<<page_id<<endl;
+  buffer_pool_manager_->UnpinPage(page_id, true);
   return DB_SUCCESS;
 }
 

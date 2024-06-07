@@ -24,6 +24,7 @@ BPlusTree::BPlusTree(index_id_t index_id, BufferPoolManager *buffer_pool_manager
     root_page_id_ = INVALID_PAGE_ID;
     header_page->Insert(index_id, root_page_id_);
   }
+  buffer_pool_manager_->UnpinPage(INDEX_ROOTS_PAGE_ID, true);
   DLOG(INFO) << "BPlusTree Init, root page id: " << root_page_id_;
   // calculate node size
   if (leaf_max_size_ == UNDEFINED_SIZE || internal_max_size_ == UNDEFINED_SIZE) {
@@ -75,7 +76,7 @@ bool BPlusTree::GetValue(const GenericKey *key, std::vector<RowId> &result, Txn 
   if (res) {
     result.push_back(value);
   }
-  buffer_pool_manager_->UnpinPage(leaf->GetPageId(), false);
+  buffer_pool_manager_->UnpinPage(leaf->GetPageId(), true);
   return res;
 }
 
