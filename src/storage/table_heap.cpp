@@ -78,7 +78,8 @@ bool TableHeap::UpdateTuple(Row &row, const RowId &rid, Txn *txn) {
   auto page = reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(rid.GetPageId()));
   if (page == nullptr) return false;
   page->WLatch();
-  auto updated = page->UpdateTuple(row, &row, schema_, txn, lock_manager_, log_manager_);
+  Row old = Row(rid);
+  auto updated = page->UpdateTuple(row, &old, schema_, txn, lock_manager_, log_manager_);
   page->WUnlatch();
   buffer_pool_manager_->UnpinPage(page->GetTablePageId(), updated);
   if (updated) return true;

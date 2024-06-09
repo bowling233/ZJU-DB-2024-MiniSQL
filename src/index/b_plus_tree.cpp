@@ -67,6 +67,7 @@ bool BPlusTree::IsEmpty() const { return root_page_id_ == INVALID_PAGE_ID; }
  * @return : true means key exists
  */
 bool BPlusTree::GetValue(const GenericKey *key, std::vector<RowId> &result, Txn *transaction) {
+  if(root_page_id_==INVALID_PAGE_ID)return false;
   BPlusTreeLeafPage *leaf = reinterpret_cast<BPlusTreeLeafPage *>(FindLeafPage(key, root_page_id_, false));
   if (leaf == nullptr) {
     return false;

@@ -30,7 +30,8 @@ uint32_t Row::DeserializeFrom(char *buf, Schema *schema) {
   ASSERT(fields_.empty(), "Non empty field in row.");
   uint32_t offset = 0;
   // rid
-  memcpy(&rid_, buf + offset, sizeof(RowId));
+  RowId temp=rid_;
+  memcpy(&temp, buf + offset, sizeof(RowId));
   offset += sizeof(RowId);
   // null bitmap
   uint32_t null_size = (schema->GetColumnCount() + 7) / 8;
