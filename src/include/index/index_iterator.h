@@ -9,6 +9,7 @@ class IndexIterator {
  public:
   // you may define your own constructor based on your member variables
   explicit IndexIterator();
+  // do not accept default constructor
 
   explicit IndexIterator(page_id_t page_id, BufferPoolManager *bpm, int index = 0);
 

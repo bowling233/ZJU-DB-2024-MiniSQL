@@ -53,6 +53,7 @@ TEST(BPlusTreeTests, BPlusTreeIndexSimpleTest) {
                               Field(TypeId::kTypeChar, const_cast<char *>("minisql"), 7, true)};
     Row row(fields);
     RowId rid(1000, i);
+    DLOG(INFO) << "Inserting " << i;
     ASSERT_EQ(DB_SUCCESS, index->InsertEntry(row, rid, nullptr));
   }
   // Test Scan
@@ -62,6 +63,7 @@ TEST(BPlusTreeTests, BPlusTreeIndexSimpleTest) {
                               Field(TypeId::kTypeChar, const_cast<char *>("minisql"), 7, true)};
     Row row(fields);
     RowId rid(1000, i);
+    DLOG(INFO) << "Scanning " << i;
     ASSERT_EQ(DB_SUCCESS, index->ScanKey(row, ret, nullptr));
     ASSERT_EQ(rid.Get(), ret[i].Get());
   }
