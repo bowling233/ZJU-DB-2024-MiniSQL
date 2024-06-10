@@ -25,7 +25,7 @@ BPlusTree::BPlusTree(index_id_t index_id, BufferPoolManager *buffer_pool_manager
     header_page->Insert(index_id, root_page_id_);
   }
   buffer_pool_manager_->UnpinPage(INDEX_ROOTS_PAGE_ID, true);
-  DLOG(INFO) << "BPlusTree Init, root page id: " << root_page_id_;
+  //DLOG(INFO) << "BPlusTree Init, root page id: " << root_page_id_;
   // calculate node size
   if (leaf_max_size_ == UNDEFINED_SIZE || internal_max_size_ == UNDEFINED_SIZE) {
     leaf_max_size_ = (PAGE_SIZE - BPlusTreeLeafPage::LEAF_PAGE_HEADER_SIZE) / (processor_.GetKeySize() + sizeof(RowId));
@@ -34,7 +34,7 @@ BPlusTree::BPlusTree(index_id_t index_id, BufferPoolManager *buffer_pool_manager
     int min_size = std::min(leaf_max_size_, internal_max_size_);
     leaf_max_size_ = internal_max_size_ = min_size;
   }
-  DLOG(INFO) << "leaf_max_size: " << leaf_max_size_ << ", internal_max_size: " << internal_max_size_;
+  //DLOG(INFO) << "leaf_max_size: " << leaf_max_size_ << ", internal_max_size: " << internal_max_size_;
 }
 
 void BPlusTree::Destroy(page_id_t current_page_id) {

@@ -16,7 +16,6 @@ IndexIterator::~IndexIterator() {
 }
 
 std::pair<GenericKey *, RowId> IndexIterator::operator*() {
-  DLOG(INFO) << "IndexIterator::operator*()" << current_page_id << " " << item_index;
   if(current_page_id == INVALID_PAGE_ID) {
     throw std::out_of_range("IndexIterator out of range");
   }
@@ -30,9 +29,9 @@ IndexIterator &IndexIterator::operator++() {
     page_id_t next_page_id = page->GetNextPageId();
     buffer_pool_manager->UnpinPage(current_page_id, false);
     current_page_id = next_page_id;
+    item_index = 0;
     if (current_page_id != INVALID_PAGE_ID) {
       page = reinterpret_cast<LeafPage *>(buffer_pool_manager->FetchPage(current_page_id)->GetData());
-      item_index = 0;
     }
   }
   return *this;
