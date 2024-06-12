@@ -364,6 +364,21 @@ dberr_t ExecuteEngine::ExecuteCreateTable(pSyntaxNode ast, ExecuteContext *conte
   //isunique primary
   vector<string>uniques;
   vector<string>primarys;
+  auto columnlist=definition;
+  while(columnlist!=nullptr&&columnlist->type_!=kNodeColumnList)
+  {
+    columnlist=columnlist->next_;
+  }
+  if(columnlist->type_==kNodeColumnList)
+  {
+    auto pri=columnlist->child_;
+    while(pri!=nullptr&&pri->type_==kNodeIdentifier)
+    {
+      primarys.push_back(pri->val_);
+      pri=pri->next_;
+    }
+  }
+
   while(definition!=nullptr&&definition->type_==kNodeColumnDefinition)
   {
     Column *column;
@@ -371,16 +386,16 @@ dberr_t ExecuteEngine::ExecuteCreateTable(pSyntaxNode ast, ExecuteContext *conte
     bool isunique = false;
     string c_name=definition->child_->val_;
     string c_type=definition->child_->next_->val_;
-    if(definition->val_!=nullptr&&definition->val_=="unique")
+    if(definition->val_!=nullptr&&string(definition->val_)=="unique")
     {
       isunique=true;
       uniques.push_back(c_name);
     }
-    else if(definition->val_=="primary keys")
+    auto it = find(primarys.begin(), primarys.end(), c_name);
+    if(it!=primarys.end())
     {
       isunique=true;
-      nullable=false;
-      primarys.push_back(c_name);
+      uniques.push_back(c_name);
     }
     if(c_type=="int")
       column=new Column(c_name,kTypeInt,index,true,isunique);
