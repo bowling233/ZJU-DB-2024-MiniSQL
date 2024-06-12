@@ -28,8 +28,8 @@ uint32_t TableMetadata::SerializeTo(char *buf) const {
  * TODO: Student Implement
  */
 uint32_t TableMetadata::GetSerializedSize() const {
-  return sizeof(TABLE_METADATA_MAGIC_NUM) + sizeof(table_id_) + (sizeof(table_name_.length()) - 4)
-         + table_name_.length() + sizeof(root_page_id_) + schema_->GetSerializedSize();
+  return sizeof(TABLE_METADATA_MAGIC_NUM) + sizeof(table_id_t) + sizeof(table_name_.length()) - 4
+  + table_name_.length() + sizeof(page_id_t) + schema_->GetSerializedSize();
 }
 
 /**

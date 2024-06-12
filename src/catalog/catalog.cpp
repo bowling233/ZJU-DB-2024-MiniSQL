@@ -55,8 +55,9 @@ CatalogMeta *CatalogMeta::DeserializeFrom(char *buf) {
  * TODO: Student Implement
  */
 uint32_t CatalogMeta::GetSerializedSize() const {
-  return sizeof(CATALOG_METADATA_MAGIC_NUM) + sizeof(decltype(index_meta_pages_.size())) + sizeof(decltype(table_meta_pages_.size())) + index_meta_pages_.size() * (sizeof(index_id_t) + sizeof(page_id_t))
-         + table_meta_pages_.size() * (sizeof (index_id_t) + sizeof (page_id_t));
+  return sizeof(CATALOG_METADATA_MAGIC_NUM)+sizeof(index_meta_pages_.size())+sizeof(table_meta_pages_.size())
+  + index_meta_pages_.size() * (sizeof(index_id_t) + sizeof(page_id_t))
+  + table_meta_pages_.size() * (sizeof (index_id_t) + sizeof (page_id_t));
 }
 
 CatalogMeta::CatalogMeta() {}
