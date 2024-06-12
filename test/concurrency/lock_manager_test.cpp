@@ -4,6 +4,8 @@
 #include "concurrency/txn_manager.h"
 #include "gtest/gtest.h"
 
+#include "glog/logging.h"
+
 void CheckGrowing(Txn &txn) { ASSERT_EQ(TxnState::kGrowing, txn.GetState()); }
 
 void CheckShrinking(Txn &txn) { ASSERT_EQ(TxnState::kShrinking, txn.GetState()); }
@@ -126,7 +128,9 @@ TEST_F(LockManagerTest, UpgradeConflictTest) {
 
   auto w0 = [&]() {
     // t0 try to lock upgrade but blocked, waits for t1 to release lock
+    //DLOG(INFO) << "t0 try to lock upgrade";
     bool flag = lock_mgr_->LockUpgrade(t0, r);
+    // DLOG(INFO) << "t0 lock upgrade success";
     // continue after t1 abort
     ASSERT_TRUE(flag);
     CheckGrowing(*t0);
@@ -134,6 +138,7 @@ TEST_F(LockManagerTest, UpgradeConflictTest) {
   };
 
   auto w1 = [&]() {
+    //DLOG(INFO) << "t1 start";
     try {
       // t1 try to lock upgrade but t0 already apply upgrade
       lock_mgr_->LockUpgrade(t1, r);
@@ -142,6 +147,7 @@ TEST_F(LockManagerTest, UpgradeConflictTest) {
     }
     CheckAborted(*t1);
     txn_mgr_->Abort(t1);
+    //DLOG(INFO) << "t1 abort";
     CheckTxnLockSize(*t1, 0, 0);
   };
 
@@ -199,16 +205,22 @@ TEST_F(LockManagerTest, UpgradeAfterAbortTest) {
   CheckTxnLockSize(*t1, 1, 0);
 
   auto w0 = [&]() {
+    //DLOG(INFO) << "t0 try to lock upgrade";
     try {
       lock_mgr_->LockUpgrade(t0, r);
     } catch (TxnAbortException &e) {
       ASSERT_EQ(AbortReason::kDeadlock, e.abort_reason_);
     }
+    //DLOG(INFO) << "t0 throw exception";
     CheckAborted(*t0);
     CheckTxnLockSize(*t0, 0, 0);
+    //DLOG(INFO) << "success";
   };
 
-  auto w1 = [&]() { txn_mgr_->Abort(t0); };
+  auto w1 = [&]() {
+    txn_mgr_->Abort(t0);
+    //DLOG(INFO) << "Aborted";
+  };
 
   std::thread i0(w0);
   std::this_thread::sleep_for(std::chrono::milliseconds(100));

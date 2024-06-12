@@ -9,6 +9,7 @@
 #include <set>
 #include <stack>
 #include <unordered_map>
+#include <map>
 #include <unordered_set>
 #include <vector>
 
@@ -167,9 +168,9 @@ public:
     inline void DisableCycleDetection() { enable_cycle_detection_ = false; }
 
 private:
-    void LockPrepare(Txn *txn, const RowId &rid);
+    //void LockPrepare(Txn *txn, const RowId &rid);
 
-    void CheckAbort(Txn *txn, LockRequestQueue &req_queue);
+    //void CheckAbort(Txn *txn, LockRequestQueue &req_queue);
 
 private:
     /** Lock table for lock requests. */
@@ -177,9 +178,8 @@ private:
     std::mutex latch_{};
 
     /** Waits-for graph representation. */
-    std::unordered_map<txn_id_t, std::set<txn_id_t>> waits_for_{};
-    std::unordered_set<txn_id_t> visited_set_{};
-    std::stack<txn_id_t> visited_path_{};
+    std::map<txn_id_t, std::set<txn_id_t>> waits_for_{};
+    // std::unordered_set<txn_id_t> visited_set_{};
     txn_id_t revisited_node_{INVALID_TXN_ID};
     std::atomic<bool> enable_cycle_detection_{false};
     std::chrono::milliseconds cycle_detection_interval_{100};

@@ -74,7 +74,7 @@ Page *BufferPoolManager::NewPage(page_id_t &page_id) {
   //    Always pick from the free list first.
   frame_id_t frame_id = TryToFindFreePage();
   if (frame_id == INVALID_PAGE_ID) {
-    DLOG(INFO) << "All pages in the buffer pool are pinned";
+    // DLOG(INFO) << "All pages in the buffer pool are pinned";
     return nullptr;
   }
   page_id = AllocatePage();
