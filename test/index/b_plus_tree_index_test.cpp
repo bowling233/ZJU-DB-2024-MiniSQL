@@ -27,6 +27,7 @@ TEST(BPlusTreeTests, BPlusTreeIndexGenericKeyTest) {
   ASSERT_EQ(0, KP.CompareKeys(k1, k2));
   free(k1);
   free(k2);
+  delete key_schema;
 }
 
 TEST(BPlusTreeTests, BPlusTreeIndexSimpleTest) {
@@ -78,6 +79,7 @@ TEST(BPlusTreeTests, BPlusTreeIndexSimpleTest) {
   }
   ASSERT_EQ(10, i);
   index->Destroy();
+  delete index_schema;
   delete index;
   delete bpm_;
   delete disk_mgr_;
