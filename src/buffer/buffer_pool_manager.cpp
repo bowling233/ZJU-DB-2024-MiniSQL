@@ -40,7 +40,8 @@ Page *BufferPoolManager::FetchPage(page_id_t page_id) {
     if (frame_id == INVALID_PAGE_ID) {
       return nullptr;
     }
-    page_table_.erase(pages_[frame_id].GetPageId());
+    // page_table_ already cleaned up in TryToFindFreePage
+    // page_table_.erase(pages_[frame_id].GetPageId());
     page_table_[page_id] = frame_id;
     pages_[frame_id].ResetMemory();
     pages_[frame_id].page_id_ = page_id;
@@ -60,8 +61,13 @@ frame_id_t BufferPoolManager::TryToFindFreePage() {
   if (!replacer_->Victim(&frame_id)) {
     return INVALID_PAGE_ID;
   }
-  FlushPage(pages_[frame_id].GetPageId());
+  // flush if dirty
+  if(pages_[frame_id].IsDirty()) {
+    FlushPage(pages_[frame_id].GetPageId());
+  }
+  // prepare for new page
   page_table_.erase(pages_[frame_id].GetPageId());
+  return frame_id;
 }
 
 Page *BufferPoolManager::NewPage(page_id_t &page_id) {
@@ -102,7 +108,7 @@ bool BufferPoolManager::DeletePage(page_id_t page_id) {
   // 3. Otherwise, P can be deleted. Remove P from the page table, reset
   //    its metadata and return it to the free list.
   else {
-    UnpinPage(page_id, false);
+    //UnpinPage(page_id, false);
     pages_[page_table_[page_id]].ResetPage();
     free_list_.emplace_back(page_table_[page_id]);
     page_table_.erase(page_id);
