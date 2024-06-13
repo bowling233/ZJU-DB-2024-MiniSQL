@@ -21,12 +21,12 @@ TableIterator::TableIterator(TableHeap *table_heap, RowId rid, Txn *txn)
     auto got = page->GetFirstTupleRid(&rid_);
     table_heap_->buffer_pool_manager_->UnpinPage(page->GetTablePageId(), false);
     if (!got) {
-      DLOG(ERROR) << "No tuple found in first table";
+      //DLOG(ERROR) << "No tuple found in first table";
       rid_ = RowId{-1};
     }
-  } else if (!(rid_ == RowId{-1})) {
-    // not implemented yet
-  }
+  } 
+  // RowId{-1} is the end of the table
+  // RowId{n} no need to do anything
 }
 
 TableIterator::TableIterator(const TableIterator &other) {
