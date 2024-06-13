@@ -25,9 +25,12 @@ TEST(BPlusTreeTests, BPlusTreeIndexGenericKeyTest) {
   Row copy_key(fields);
   KP.SerializeFromKey(k2, copy_key, key_schema);
   ASSERT_EQ(0, KP.CompareKeys(k1, k2));
+  free(k1);
+  free(k2);
 }
 
 TEST(BPlusTreeTests, BPlusTreeIndexSimpleTest) {
+  remove(db_name.c_str());
   auto disk_mgr_ = new DiskManager(db_name);
   auto bpm_ = new BufferPoolManager(DEFAULT_BUFFER_POOL_SIZE, disk_mgr_);
   page_id_t id;
