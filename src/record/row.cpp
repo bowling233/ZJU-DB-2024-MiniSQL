@@ -41,7 +41,7 @@ uint32_t Row::DeserializeFrom(char *buf, Schema *schema) {
   // fields
   for (uint32_t i = 0; i < schema->GetColumnCount(); i++) {
     TypeId type = schema->GetColumn(i)->GetType();
-    Field *field = new Field(type);
+    Field *field;
     offset += field->DeserializeFrom(buf + offset, type, &field, null_bitmap[i / 8] & (1 << (i % 8)));
     fields_.push_back(field);
   }
