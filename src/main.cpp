@@ -24,7 +24,8 @@ void InputCommand(char *input, const int len) {
   printf("minisql > ");
   int i = 0;
   char ch;
-  while ((ch = getchar()) != ';') {
+  int eof;
+  while (((eof = getchar()) != EOF) && ((ch = eof) != ';')) {
     input[i++] = ch;
   }
   input[i] = ch;  // ;
