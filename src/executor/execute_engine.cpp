@@ -17,6 +17,8 @@
 #include "planner/planner.h"
 #include "utils/utils.h"
 
+static bool supress_output = false;
+
 ExecuteEngine::ExecuteEngine() {
   char path[] = "./databases";
   DIR *dir;
@@ -154,54 +156,55 @@ dberr_t ExecuteEngine::Execute(pSyntaxNode ast) {
   auto stop_time = std::chrono::system_clock::now();
   double duration_time =
       double((std::chrono::duration_cast<std::chrono::milliseconds>(stop_time - start_time)).count());
-  // Return the result set as string.
-  std::stringstream ss;
-  ResultWriter writer(ss);
 
-  if (planner.plan_->GetType() == PlanType::SeqScan || planner.plan_->GetType() == PlanType::IndexScan) {
-    auto schema = planner.plan_->OutputSchema();
-    auto num_of_columns = schema->GetColumnCount();
-    if (!result_set.empty()) {
-      // find the max width for each column
-      vector<int> data_width(num_of_columns, 0);
-      for (const auto &row : result_set) {
-        for (uint32_t i = 0; i < num_of_columns; i++) {
-          data_width[i] = max(data_width[i], int(row.GetField(i)->toString().size()));
+  if (!supress_output) {
+    // Return the result set as string.
+    std::stringstream ss;
+    ResultWriter writer(ss);
+    if (planner.plan_->GetType() == PlanType::SeqScan || planner.plan_->GetType() == PlanType::IndexScan) {
+      auto schema = planner.plan_->OutputSchema();
+      auto num_of_columns = schema->GetColumnCount();
+      if (!result_set.empty()) {
+        // find the max width for each column
+        vector<int> data_width(num_of_columns, 0);
+        for (const auto &row : result_set) {
+          for (uint32_t i = 0; i < num_of_columns; i++) {
+            data_width[i] = max(data_width[i], int(row.GetField(i)->toString().size()));
+          }
         }
-      }
-      int k = 0;
-      for (const auto &column : schema->GetColumns()) {
-        data_width[k] = max(data_width[k], int(column->GetName().length()));
-        k++;
-      }
-      // Generate header for the result set.
-      writer.Divider(data_width);
-      k = 0;
-      writer.BeginRow();
-      for (const auto &column : schema->GetColumns()) {
-        writer.WriteHeaderCell(column->GetName(), data_width[k++]);
-      }
-      writer.EndRow();
-      writer.Divider(data_width);
-
-      // Transforming result set into strings.
-      for (const auto &row : result_set) {
+        int k = 0;
+        for (const auto &column : schema->GetColumns()) {
+          data_width[k] = max(data_width[k], int(column->GetName().length()));
+          k++;
+        }
+        // Generate header for the result set.
+        writer.Divider(data_width);
+        k = 0;
         writer.BeginRow();
-        for (uint32_t i = 0; i < schema->GetColumnCount(); i++) {
-          writer.WriteCell(row.GetField(i)->toString(), data_width[i]);
+        for (const auto &column : schema->GetColumns()) {
+          writer.WriteHeaderCell(column->GetName(), data_width[k++]);
         }
         writer.EndRow();
+        writer.Divider(data_width);
+
+        // Transforming result set into strings.
+        for (const auto &row : result_set) {
+          writer.BeginRow();
+          for (uint32_t i = 0; i < schema->GetColumnCount(); i++) {
+            writer.WriteCell(row.GetField(i)->toString(), data_width[i]);
+          }
+          writer.EndRow();
+        }
+        writer.Divider(data_width);
       }
-      writer.Divider(data_width);
+      writer.EndInformation(result_set.size(), duration_time, true);
+    } else {
+      writer.EndInformation(result_set.size(), duration_time, false);
     }
-    writer.EndInformation(result_set.size(), duration_time, true);
-  } else {
-    writer.EndInformation(result_set.size(), duration_time, false);
+    std::cout << writer.stream_.rdbuf();
   }
-  std::cout << writer.stream_.rdbuf();
   // todo:: use shared_ptr for schema
-  if (ast->type_ == kNodeSelect)
-      delete planner.plan_->OutputSchema();
+  if (ast->type_ == kNodeSelect) delete planner.plan_->OutputSchema();
   return DB_SUCCESS;
 }
 
@@ -262,8 +265,7 @@ dberr_t ExecuteEngine::ExecuteDropDatabase(pSyntaxNode ast, ExecuteContext *cont
   remove(("./databases/" + db_name).c_str());
   delete dbs_[db_name];
   dbs_.erase(db_name);
-  if (db_name == current_db_)
-    current_db_ = "";
+  if (db_name == current_db_) current_db_ = "";
   return DB_SUCCESS;
 }
 
@@ -279,17 +281,13 @@ dberr_t ExecuteEngine::ExecuteShowDatabases(pSyntaxNode ast, ExecuteContext *con
   for (const auto &itr : dbs_) {
     if (itr.first.length() > max_width) max_width = itr.first.length();
   }
-  cout << "+" << setfill('-') << setw(max_width + 2) << ""
-       << "+" << endl;
-  cout << "| " << std::left << setfill(' ') << setw(max_width) << "Database"
-       << " |" << endl;
-  cout << "+" << setfill('-') << setw(max_width + 2) << ""
-       << "+" << endl;
+  cout << "+" << setfill('-') << setw(max_width + 2) << "" << "+" << endl;
+  cout << "| " << std::left << setfill(' ') << setw(max_width) << "Database" << " |" << endl;
+  cout << "+" << setfill('-') << setw(max_width + 2) << "" << "+" << endl;
   for (const auto &itr : dbs_) {
     cout << "| " << std::left << setfill(' ') << setw(max_width) << itr.first << " |" << endl;
   }
-  cout << "+" << setfill('-') << setw(max_width + 2) << ""
-       << "+" << endl;
+  cout << "+" << setfill('-') << setw(max_width + 2) << "" << "+" << endl;
   return DB_SUCCESS;
 }
 
@@ -324,16 +322,13 @@ dberr_t ExecuteEngine::ExecuteShowTables(pSyntaxNode ast, ExecuteContext *contex
   for (const auto &itr : tables) {
     if (itr->GetTableName().length() > max_width) max_width = itr->GetTableName().length();
   }
-  cout << "+" << setfill('-') << setw(max_width + 2) << ""
-       << "+" << endl;
+  cout << "+" << setfill('-') << setw(max_width + 2) << "" << "+" << endl;
   cout << "| " << std::left << setfill(' ') << setw(max_width) << table_in_db << " |" << endl;
-  cout << "+" << setfill('-') << setw(max_width + 2) << ""
-       << "+" << endl;
+  cout << "+" << setfill('-') << setw(max_width + 2) << "" << "+" << endl;
   for (const auto &itr : tables) {
     cout << "| " << std::left << setfill(' ') << setw(max_width) << itr->GetTableName() << " |" << endl;
   }
-  cout << "+" << setfill('-') << setw(max_width + 2) << ""
-       << "+" << endl;
+  cout << "+" << setfill('-') << setw(max_width + 2) << "" << "+" << endl;
   return DB_SUCCESS;
 }
 
@@ -344,93 +339,84 @@ dberr_t ExecuteEngine::ExecuteCreateTable(pSyntaxNode ast, ExecuteContext *conte
 #ifdef ENABLE_EXECUTE_DEBUG
   LOG(INFO) << "ExecuteCreateTable" << std::endl;
 #endif
-  if(current_db_.empty())//no database
+  if (current_db_.empty())  // no database
     return DB_FAILED;
 
-  //get table name
-  if(ast->child_->type_!=kNodeIdentifier)
-  {
+  // get table name
+  if (ast->child_->type_ != kNodeIdentifier) {
     return DB_FAILED;
   }
   string table_name(ast->child_->val_);
 
-  //get all columns
-  vector<Column*>columns;
-  uint32_t index=0;
-  auto list=ast->child_->next_;
-  if(list->type_!=kNodeColumnDefinitionList)
-  {
+  // get all columns
+  vector<Column *> columns;
+  uint32_t index = 0;
+  auto list = ast->child_->next_;
+  if (list->type_ != kNodeColumnDefinitionList) {
     return DB_FAILED;
   }
-  auto definition=list->child_;
+  auto definition = list->child_;
 
-  //isunique primary
-  vector<string>uniques;
-  vector<string>primarys;
-  auto columnlist=definition;
-  while(columnlist!=nullptr&&columnlist->type_!=kNodeColumnList)
-  {
-    columnlist=columnlist->next_;
+  // isunique primary
+  vector<string> uniques;
+  vector<string> primarys;
+  auto columnlist = definition;
+  while (columnlist != nullptr && columnlist->type_ != kNodeColumnList) {
+    columnlist = columnlist->next_;
   }
-  if(columnlist!=nullptr&&columnlist->type_==kNodeColumnList)
-  {
-    auto pri=columnlist->child_;
-    while(pri!=nullptr&&pri->type_==kNodeIdentifier)
-    {
+  if (columnlist != nullptr && columnlist->type_ == kNodeColumnList) {
+    auto pri = columnlist->child_;
+    while (pri != nullptr && pri->type_ == kNodeIdentifier) {
       primarys.push_back(pri->val_);
-      pri=pri->next_;
+      pri = pri->next_;
     }
   }
 
-  while(definition!=nullptr&&definition->type_==kNodeColumnDefinition)
-  {
+  while (definition != nullptr && definition->type_ == kNodeColumnDefinition) {
     Column *column;
     bool nullable = true;
     bool isunique = false;
-    string c_name=definition->child_->val_;
-    string c_type=definition->child_->next_->val_;
-    if(definition->val_!=nullptr&&string(definition->val_)=="unique")
-    {
-      isunique=true;
+    string c_name = definition->child_->val_;
+    string c_type = definition->child_->next_->val_;
+    if (definition->val_ != nullptr && string(definition->val_) == "unique") {
+      isunique = true;
       uniques.push_back(c_name);
     }
     auto it = find(primarys.begin(), primarys.end(), c_name);
-    if(it!=primarys.end())
-    {
-      isunique=true;
+    if (it != primarys.end()) {
+      isunique = true;
       uniques.push_back(c_name);
     }
-    if(c_type=="int")
-      column=new Column(c_name,kTypeInt,index,true,isunique);
-    else if(c_type=="float")
-      column=new Column(c_name,kTypeFloat,index,true,isunique);
-    else if(c_type=="char")
-    {
-      uint32_t length=stoi(definition->child_->next_->child_->val_);
-      column=new Column(c_name,kTypeChar,length,index,true,isunique);
+    if (c_type == "int")
+      column = new Column(c_name, kTypeInt, index, true, isunique);
+    else if (c_type == "float")
+      column = new Column(c_name, kTypeFloat, index, true, isunique);
+    else if (c_type == "char") {
+      uint32_t length = stoi(definition->child_->next_->child_->val_);
+      column = new Column(c_name, kTypeChar, length, index, true, isunique);
     }
     columns.push_back(column);
     index++;
-    definition=definition->next_;
+    definition = definition->next_;
   }
 
-  //create table
-  auto catalog=context->GetCatalog();
-  Schema *schema=new Schema(columns);
+  // create table
+  auto catalog = context->GetCatalog();
+  Schema *schema = new Schema(columns);
   TableInfo *table_info;
-  auto result=catalog->CreateTable(table_name,schema,context->GetTransaction(),table_info);
-  if(result!=DB_SUCCESS)return result;
+  auto result = catalog->CreateTable(table_name, schema, context->GetTransaction(), table_info);
+  if (result != DB_SUCCESS) return result;
 
-  //unique index
-  for(auto it:uniques){
+  // unique index
+  for (auto it : uniques) {
     string index_name = "UNIQUE_";
-    index_name += it + "_ON_" +table_name;
+    index_name += it + "_ON_" + table_name;
     IndexInfo *index_info;
     catalog->CreateIndex(table_name, index_name, uniques, context->GetTransaction(), index_info, "btree");
   }
-  if(primarys.size()>0) {
+  if (primarys.size() > 0) {
     string index_name = "AUTO_CREATED_INDEX_OF_";
-    for (auto it: primarys)index_name += it + "_";
+    for (auto it : primarys) index_name += it + "_";
     index_name += "ON_" + table_name;
     IndexInfo *index_info;
     catalog->CreateIndex(table_name, index_name, primarys, context->GetTransaction(), index_info, "btree");
@@ -446,21 +432,19 @@ dberr_t ExecuteEngine::ExecuteDropTable(pSyntaxNode ast, ExecuteContext *context
 #ifdef ENABLE_EXECUTE_DEBUG
   LOG(INFO) << "ExecuteDropTable" << std::endl;
 #endif
-  if(current_db_.empty())//no database
+  if (current_db_.empty())  // no database
     return DB_FAILED;
-  auto catalog=context->GetCatalog();
+  auto catalog = context->GetCatalog();
 
-  //get table name
+  // get table name
   string table_name(ast->child_->val_);
-  auto result=catalog->DropTable(table_name);
-  if(result!=DB_SUCCESS)
-    return result;
+  auto result = catalog->DropTable(table_name);
+  if (result != DB_SUCCESS) return result;
 
-  //get indexes and delete
-  vector<IndexInfo*>indexes;
-  catalog->GetTableIndexes(table_name,indexes);
-  for(auto it:indexes)
-    catalog->DropIndex(table_name,it->GetIndexName());
+  // get indexes and delete
+  vector<IndexInfo *> indexes;
+  catalog->GetTableIndexes(table_name, indexes);
+  for (auto it : indexes) catalog->DropIndex(table_name, it->GetIndexName());
   return DB_SUCCESS;
 }
 
@@ -471,22 +455,21 @@ dberr_t ExecuteEngine::ExecuteShowIndexes(pSyntaxNode ast, ExecuteContext *conte
 #ifdef ENABLE_EXECUTE_DEBUG
   LOG(INFO) << "ExecuteShowIndexes" << std::endl;
 #endif
-  if(current_db_.empty())
-    return DB_FAILED;
-  auto catalog=context->GetCatalog();
-  
-  //get tables
-  vector<TableInfo*>tables;
+  if (current_db_.empty()) return DB_FAILED;
+  auto catalog = context->GetCatalog();
+
+  // get tables
+  vector<TableInfo *> tables;
   catalog->GetTables(tables);
 
-  //get and print indexes
+  // get and print indexes
   int count = 0;
-  cout<<"Show Indexes"<<endl;
-  for (auto table: tables) {
-    vector<IndexInfo*> indexes;
+  cout << "Show Indexes" << endl;
+  for (auto table : tables) {
+    vector<IndexInfo *> indexes;
     catalog->GetTableIndexes(table->GetTableName(), indexes);
-    cout<< "\ttable: " << table->GetTableName() <<endl;
-    for (auto index: indexes) {
+    cout << "\ttable: " << table->GetTableName() << endl;
+    for (auto index : indexes) {
       string index_name = index->GetIndexName();
       cout << "\t\tindex: " << index_name << endl;
       count++;
@@ -503,26 +486,23 @@ dberr_t ExecuteEngine::ExecuteCreateIndex(pSyntaxNode ast, ExecuteContext *conte
 #ifdef ENABLE_EXECUTE_DEBUG
   LOG(INFO) << "ExecuteCreateIndex" << std::endl;
 #endif
-  if(current_db_.empty())
-    return DB_FAILED;
+  if (current_db_.empty()) return DB_FAILED;
 
-  string i_name=ast->child_->val_;
-  string t_name=ast->child_->next_->val_;
+  string i_name = ast->child_->val_;
+  string t_name = ast->child_->next_->val_;
 
-  auto list=ast->child_->next_->next_;
-  if(list->type_!=kNodeColumnList)
-  return DB_FAILED;
+  auto list = ast->child_->next_->next_;
+  if (list->type_ != kNodeColumnList) return DB_FAILED;
 
   vector<string> keys;
-  auto key=list->child_;
-  while(key!=nullptr)
-  {
+  auto key = list->child_;
+  while (key != nullptr) {
     keys.push_back(key->val_);
-    key=key->next_;
+    key = key->next_;
   }
   IndexInfo *index_info;
-  auto catalog=context->GetCatalog();
-  auto result=catalog->CreateIndex(t_name,i_name,keys,context->GetTransaction(),index_info,"btree");
+  auto catalog = context->GetCatalog();
+  auto result = catalog->CreateIndex(t_name, i_name, keys, context->GetTransaction(), index_info, "btree");
   return result;
 }
 
@@ -533,19 +513,16 @@ dberr_t ExecuteEngine::ExecuteDropIndex(pSyntaxNode ast, ExecuteContext *context
 #ifdef ENABLE_EXECUTE_DEBUG
   LOG(INFO) << "ExecuteDropIndex" << std::endl;
 #endif
-  if(current_db_.empty())
-    return DB_FAILED;
-  auto catalog=context->GetCatalog();
+  if (current_db_.empty()) return DB_FAILED;
+  auto catalog = context->GetCatalog();
 
-  //get table and find index
-  string index_name=ast->child_->val_;
-  vector<TableInfo*>tables;
+  // get table and find index
+  string index_name = ast->child_->val_;
+  vector<TableInfo *> tables;
   catalog->GetTables(tables);
-  auto res=DB_INDEX_NOT_FOUND;
-  for(auto it:tables)
-  {
-    if(catalog->DropIndex(it->GetTableName(),index_name)==DB_SUCCESS)
-    auto res=DB_SUCCESS;
+  auto res = DB_INDEX_NOT_FOUND;
+  for (auto it : tables) {
+    if (catalog->DropIndex(it->GetTableName(), index_name) == DB_SUCCESS) auto res = DB_SUCCESS;
   }
   return res;
 }
@@ -584,18 +561,21 @@ dberr_t ExecuteEngine::ExecuteExecfile(pSyntaxNode ast, ExecuteContext *context)
 #ifdef ENABLE_EXECUTE_DEBUG
   LOG(INFO) << "ExecuteExecfile" << std::endl;
 #endif
-  string file_name=ast->child_->val_;
-  FILE *file=fopen(file_name.c_str(), "r");
-  if(file == nullptr)//can't open
+  string file_name = ast->child_->val_;
+  FILE *file = fopen(file_name.c_str(), "r");
+  if (file == nullptr)  // can't open
     return DB_FAILED;
-  
+
   // command buffer
   const int buf_size = 1024;
   char cmd[buf_size];
 
+  std::cout << "Execfile started, output supressed." << std::endl;
+  // record start time
+  auto start_time = std::chrono::system_clock::now();
+  supress_output = true;
   while (1) {
-    if(feof(file))
-    {
+    if (feof(file)) {
       break;
     }
     memset(cmd, 0, 1024);
@@ -624,7 +604,7 @@ dberr_t ExecuteEngine::ExecuteExecfile(pSyntaxNode ast, ExecuteContext *context)
     if (MinisqlParserGetError()) {
       // error
       printf("%s\n", MinisqlParserGetErrorMessage());
-    } 
+    }
 
     auto result = Execute(MinisqlGetParserRootNode());
 
@@ -635,6 +615,13 @@ dberr_t ExecuteEngine::ExecuteExecfile(pSyntaxNode ast, ExecuteContext *context)
 
     ExecuteInformation(result);
   }
+  supress_output = false;
+  // record stop time
+  auto stop_time = std::chrono::system_clock::now();
+  double duration_time =
+      double((std::chrono::duration_cast<std::chrono::milliseconds>(stop_time - start_time)).count());
+  std::cout << "Execfile finished in " << duration_time << " ms" << std::endl;
+  fclose(file);
   return DB_SUCCESS;
 }
 
