@@ -22,9 +22,6 @@ BufferPoolManager::~BufferPoolManager() {
   delete replacer_;
 }
 
-/**
- * TODO: Student Implement
- */
 Page *BufferPoolManager::FetchPage(page_id_t page_id) {
   // 1.     Search the page table for the requested page (P).
   // 1.1    If P exists, pin it and return it immediately.

@@ -6,13 +6,13 @@
 
 #include "glog/logging.h"
 
-void CheckGrowing(Txn &txn) { ASSERT_EQ(TxnState::kGrowing, txn.GetState()); }
+inline void CheckGrowing(Txn &txn) { ASSERT_EQ(TxnState::kGrowing, txn.GetState()); }
 
-void CheckShrinking(Txn &txn) { ASSERT_EQ(TxnState::kShrinking, txn.GetState()); }
+inline void CheckShrinking(Txn &txn) { ASSERT_EQ(TxnState::kShrinking, txn.GetState()); }
 
-void CheckAborted(Txn &txn) { ASSERT_EQ(TxnState::kAborted, txn.GetState()); }
+inline void CheckAborted(Txn &txn) { ASSERT_EQ(TxnState::kAborted, txn.GetState()); }
 
-void CheckCommitted(Txn &txn) { ASSERT_EQ(TxnState::kCommitted, txn.GetState()); }
+inline void CheckCommitted(Txn &txn) { ASSERT_EQ(TxnState::kCommitted, txn.GetState()); }
 
 void CheckTxnLockSize(Txn &txn, size_t shared_expected, size_t exclusive_expected) {
   ASSERT_EQ(shared_expected, txn.GetSharedLockSet().size());

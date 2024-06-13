@@ -16,24 +16,21 @@ void LockManager::SetTxnMgr(TxnManager *txn_mgr) { txn_mgr_ = txn_mgr; }
 /**
  * @brief 事务获取共享锁
  *
- * 1. RU 状态下，抛出异常
- * 2. 事务状态不是 kGrowing，抛出异常
- * 3. 获取 rid 对应的请求队列，申请
- * 4. 等待直到被授予
- *
  * @param txn
  * @param rid
  * @return true
  * @return false
  */
 bool LockManager::LockShared(Txn *txn, const RowId &rid) {
+  // 异常：RU 隔离级别共享锁无效
   if (txn->GetIsolationLevel() == IsolationLevel::kReadUncommitted) {
-    // 事务状态变更
+    // 更新事务状态
     txn->SetState(TxnState::kAborted);
     throw TxnAbortException(txn->GetTxnId(), AbortReason::kLockSharedOnReadUncommitted);
   }
+  // 异常：事务状态错误
   if (txn->GetState() != TxnState::kGrowing) {
-    // 事务状态变更
+    // 更新事务状态
     txn->SetState(TxnState::kAborted);
     throw TxnAbortException(txn->GetTxnId(), AbortReason::kLockOnShrinking);
   }
@@ -50,11 +47,15 @@ bool LockManager::LockShared(Txn *txn, const RowId &rid) {
     }
     return true;
   });
+  // 异常：事务状态错误
+  if (txn->GetState() != TxnState::kGrowing) {
+    return false;
+  }
   // 获得锁
   lock_request_queue.GetLockRequestIter(txn->GetTxnId())->granted_ = LockMode::kShared;
   lock_request_queue.sharing_cnt_++;
   lock_request_queue.cv_.notify_all();
-  // 事务状态变更
+  // 更新事务锁计数
   txn->GetSharedLockSet().insert(rid);
   return true;
 }
@@ -62,15 +63,13 @@ bool LockManager::LockShared(Txn *txn, const RowId &rid) {
 /**
  * @brief 事务获取排他锁
  *
- * 1. 事务状态不是 kGrowing，抛出异常
- * 2. 获取 rid 对应的请求队列，等待直到可以获取排他锁，或者被死锁检测到
- *
  * @param txn
  * @param rid
  * @return true
  * @return false
  */
 bool LockManager::LockExclusive(Txn *txn, const RowId &rid) {
+  // 异常：事务状态错误
   if (txn->GetState() != TxnState::kGrowing) {
     throw TxnAbortException(txn->GetTxnId(), AbortReason::kLockOnShrinking);
   }
@@ -88,6 +87,10 @@ bool LockManager::LockExclusive(Txn *txn, const RowId &rid) {
     }
     return true;
   });
+  // 异常：事务状态错误
+  if (txn->GetState() != TxnState::kGrowing) {
+    return false;
+  }
   // 获得锁
   lock_request_queue.GetLockRequestIter(txn->GetTxnId())->granted_ = LockMode::kExclusive;
   lock_request_queue.is_writing_ = true;
@@ -111,53 +114,55 @@ bool LockManager::LockExclusive(Txn *txn, const RowId &rid) {
  * @return false
  */
 bool LockManager::LockUpgrade(Txn *txn, const RowId &rid) {
-  // 事务状态错误
+  // 异常：事务状态错误
   if (txn->GetState() != TxnState::kGrowing) {
-    // 事务状态变更
+    // 更新事务状态
     txn->SetState(TxnState::kAborted);
     throw TxnAbortException(txn->GetTxnId(), AbortReason::kLockOnShrinking);
   }
   auto &lock_request_queue = lock_table_[rid];
-  // 已有升级等待
+  // 异常：冲突升级
   if (lock_request_queue.is_upgrading_) {
     txn->SetState(TxnState::kAborted);
     throw TxnAbortException(txn->GetTxnId(), AbortReason::kUpgradeConflict);
   }
-  // 尝试获取原有的锁
+  // 获取原有的锁
   auto old_lock = lock_request_queue.GetLockRequestIter(txn->GetTxnId());
   if (old_lock == lock_request_queue.req_list_.end()) {
     throw "No lock to upgrade";
   }
-  // 告知事务升级
-  lock_request_queue.is_upgrading_ = true;
+  // 告知锁升级
   std::unique_lock<std::mutex> lock(latch_);
+  lock_request_queue.is_upgrading_ = true;
+  old_lock->lock_mode_ = LockMode::kExclusive;
   // 阻塞情况：
   // 1. 有排他锁
   // 因为有 UpgradeConflict，所以必然不会有其他锁等待
   // 3. 有共享锁
   // 到 Upgrade 时，应当保证共享锁是自己的
   lock_request_queue.cv_.wait(lock, [&] {
-    //DLOG(INFO) << "notified";
+    // //DLOG(INFO) << "notified";
     if (lock_request_queue.is_writing_ || lock_request_queue.sharing_cnt_ > 1) {
       return false;
     }
     return true;
   });
-  if (lock_request_queue.req_list_iter_map_.find(txn->GetTxnId()) == lock_request_queue.req_list_iter_map_.end()) {
-    // 等待过程中，事务可能被回滚
-    // DLOG(INFO) << "txn not found";
+  // 异常：事务状态错误
+  if (txn->GetState() != TxnState::kGrowing) {
+    // 放弃升级
+    // //DLOG(INFO) << "txn not found";
     lock_request_queue.is_upgrading_ = false;
     lock_request_queue.cv_.notify_all();
-    // 卧槽，这边怎么不是抛异常，抛异常没人接收，为什么啊，命名测试程序中直接try的这个函数。
+    // 卧槽，这边怎么不是抛异常，抛异常没人接收，为什么啊，明明测试程序中直接try的这个函数。
     return false;
   }
-  // 锁的类型变更
+  // 更新锁的类型
   old_lock->granted_ = LockMode::kExclusive;
+  // 更新请求队列状态
   lock_request_queue.sharing_cnt_--;
-  // 请求队列状态变更
   lock_request_queue.is_writing_ = true;
   lock_request_queue.is_upgrading_ = false;
-  // 事务状态变更
+  // 更新事务锁计数
   txn->GetSharedLockSet().erase(rid);
   txn->GetExclusiveLockSet().insert(rid);
   // 通知等待
@@ -182,9 +187,9 @@ bool LockManager::Unlock(Txn *txn, const RowId &rid) {
   std::unique_lock<std::mutex> lock(latch_);
   // 获取原有的锁请求
   auto lock_request = lock_request_queue.GetLockRequestIter(txn->GetTxnId());
-  // 清除所有锁请求。每个事务在队列中最多可能有两个请求：共享锁和升级锁
+  // 清除锁请求，最多只有一个
   if (lock_request == lock_request_queue.req_list_.end()) {
-    throw "No lock to unlock";
+    return false;
   }
   // 共享锁
   if (lock_request->granted_ == LockMode::kShared) {
@@ -207,12 +212,12 @@ bool LockManager::Unlock(Txn *txn, const RowId &rid) {
   return res;
 }
 
-//弃用
-// void LockManager::LockPrepare(Txn *txn, const RowId &rid) {
-// }
-// 
-// void LockManager::CheckAbort(Txn *txn, LockManager::LockRequestQueue &req_queue) {
-// }
+// 弃用
+//  void LockManager::LockPrepare(Txn *txn, const RowId &rid) {
+//  }
+//
+//  void LockManager::CheckAbort(Txn *txn, LockManager::LockRequestQueue &req_queue) {
+//  }
 
 /**
  * @brief 构建等待图
@@ -234,10 +239,11 @@ void LockManager::RemoveEdge(txn_id_t t1, txn_id_t t2) { waits_for_[t1].erase(t2
  * @return false
  */
 bool LockManager::HasCycle(txn_id_t &newest_tid_in_cycle) {
+  //DLOG(INFO) << "Cycle detection";
   std::unordered_set<txn_id_t> explored_set_{};
   revisited_node_ = INVALID_TXN_ID;
   for (const auto &kv : waits_for_) {
-    // DLOG(INFO) << "Checking " << kv.first;
+     //DLOG(INFO) << "Checking " << kv.first;
     //  节点已探索过
     if (explored_set_.find(kv.first) != explored_set_.end()) {
       continue;
@@ -253,14 +259,14 @@ bool LockManager::HasCycle(txn_id_t &newest_tid_in_cycle) {
     visited_path_.push_back({root_set_.begin(), root_set_.end()});
     while (!visited_path_.empty()) {
       auto &cur = visited_path_.back();
-      // DLOG(INFO) << "Exploring " << *visited_path_.back().first;
-      // DLOG(INFO) << "current path";
-      // for (const auto &pair : visited_path_) {
-      //   DLOG(INFO) << *pair.first;
-      // }
+       //DLOG(INFO) << "Exploring " << *visited_path_.back().first;
+       //DLOG(INFO) << "current path";
+       for (const auto &pair : visited_path_) {
+         //DLOG(INFO) << *pair.first;
+       }
       //  没有同级分枝，上层节点也探索完毕
       if (cur.first == cur.second) {
-        // DLOG(INFO) << "Backtracking";
+         //DLOG(INFO) << "Backtracking";
         visited_path_.pop_back();
         // 如果有上层节点
         if (!visited_path_.empty()) {
@@ -271,29 +277,29 @@ bool LockManager::HasCycle(txn_id_t &newest_tid_in_cycle) {
       }
       // 没有邻居，当前节点探索完毕
       if (waits_for_[*cur.first].empty()) {
-        // DLOG(INFO) << "Explored " << *cur.first;
+         //DLOG(INFO) << "Explored " << *cur.first;
         explored_set_.insert(*cur.first);
         cur.first++;
         continue;
       }
       // 遍历邻居
       for (auto it = waits_for_[*cur.first].begin(); it != waits_for_[*cur.first].end(); it++) {
-        // DLOG(INFO) << "Visiting " << *it;
+         //DLOG(INFO) << "Visiting " << *it;
         //  邻居已探索过，跳过
         if (explored_set_.find(*it) != explored_set_.end()) {
-          // DLOG(INFO) << "Visited " << *it;
+          // //DLOG(INFO) << "Visited " << *it;
           continue;
         }
         // 邻居出现在路径中，说明有环
         if (std::find_if(visited_path_.begin(), visited_path_.end(),
                          [it](const auto &pair) { return *pair.first == *it; }) != visited_path_.end()) {
-          // DLOG(INFO) << "Cycle detected";
+           //DLOG(INFO) << "Cycle detected";
           newest_tid_in_cycle = *cur.first;
           revisited_node_ = *it;
           return true;
         }
         // 邻居未探索，加入路径
-        // DLOG(INFO) << "Adding " << *it;
+         //DLOG(INFO) << "Adding " << *it;
         visited_path_.push_back({it, waits_for_[*cur.first].end()});
         break;
       }
@@ -326,13 +332,60 @@ void LockManager::DeleteNode(txn_id_t txn_id) {
 
 void LockManager::RunCycleDetection() {
   while (enable_cycle_detection_) {
+    // //DLOG(INFO) << "Cycle detection running";
     // 从lock_table_创建等待图
+    waits_for_.clear();
     for (const auto &kv : lock_table_) {
+      // //DLOG(INFO) << "Data: " << kv.first.GetSlotNum();
       auto &req_list = kv.second.req_list_;
-      for (auto it = req_list.begin(); it != req_list.end(); it++) {
-        for (auto it2 = it; it2 != req_list.end(); it2++) {
-          if (it->txn_id_ != it2->txn_id_) {
-            AddEdge(it->txn_id_, it2->txn_id_);
+      for (auto it = req_list.rbegin(); it != req_list.rend(); it++) {
+        // //DLOG(INFO) << "it: lock_mode ";
+        // switch (it->lock_mode_)
+        // {
+        // case LockMode::kShared:
+        //   //DLOG(INFO) << "shared";
+        //   break;
+        // case LockMode::kExclusive:
+        //   //DLOG(INFO) << "exclusive";
+        //   break;
+        // }
+        // //DLOG(INFO) << "it: granted ";
+        // switch (it->granted_)
+        // {
+        // case LockMode::kNone:
+        //   //DLOG(INFO) << "none";
+        //   break;
+        // case LockMode::kShared:
+        //   //DLOG(INFO) << "shared";
+        //   break;
+        // case LockMode::kExclusive:
+        //   //DLOG(INFO) << "exclusive";
+        //   break;
+        // }
+        if (it->granted_ == LockMode::kNone) {
+          break;
+        }
+        // 如果 it 未被授予，说明此后的都未被授予。感觉可以直接 break 等到授予了再说。
+        // lock_mdoe | granted_ | 说明
+        // *         | none     | 未授予
+        // shared    | shared   | 共享锁，将影响后续未授予的排他锁和升级锁
+        // exclusive | exclusive| 排他锁，将影响后续未授予的任何锁
+        // exclusive | shared   | 升级锁，将影响后续未授予的任何锁
+        for (auto it2 = it; it2 != req_list.rend(); it2++) {
+          if (it2->granted_ == LockMode::kNone) {
+            // //DLOG(INFO) << "it2: lock_mode ";
+            // switch (it2->lock_mode_)
+            // {
+            // case LockMode::kShared:
+            //   //DLOG(INFO) << "shared";
+            //   break;
+            // case LockMode::kExclusive:
+            //   //DLOG(INFO) << "exclusive";
+            //   break;
+            // }
+            if ((it->lock_mode_ == LockMode::kShared && it2->lock_mode_ == LockMode::kExclusive) ||
+                (it->lock_mode_ == LockMode::kExclusive))
+              AddEdge(it2->txn_id_, it->txn_id_);
           }
         }
       }
@@ -340,7 +393,8 @@ void LockManager::RunCycleDetection() {
     txn_id_t newest_tid_in_cycle;
     if (HasCycle(newest_tid_in_cycle)) {
       txn_mgr_->Abort(txn_mgr_->GetTransaction(newest_tid_in_cycle));
-      DeleteNode(revisited_node_);
+      // DLOG(INFO) << "Cycle detected, aborting txn " << newest_tid_in_cycle;
+      // DeleteNode(revisited_node_);
     }
     std::this_thread::sleep_for(cycle_detection_interval_);
   }
