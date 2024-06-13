@@ -68,8 +68,7 @@ dberr_t BPlusTreeIndex::ScanKey(const Row &key, vector<RowId> &result, Txn *txn,
       result.emplace_back((*iter).second);
     }
     vector<RowId> temp;
-    if (container_.GetValue(index_key, temp, txn))
-      result.erase(find(result.begin(), result.end(), temp[0]));
+    if (container_.GetValue(index_key, temp, txn)) result.erase(find(result.begin(), result.end(), temp[0]));
   }
   free(index_key);
   if (!result.empty())
@@ -83,14 +82,8 @@ dberr_t BPlusTreeIndex::Destroy() {
   return DB_SUCCESS;
 }
 
-IndexIterator BPlusTreeIndex::GetBeginIterator() {
-  return container_.Begin();
-}
+IndexIterator BPlusTreeIndex::GetBeginIterator() { return container_.Begin(); }
 
-IndexIterator BPlusTreeIndex::GetBeginIterator(GenericKey *key) {
-  return container_.Begin(key);
-}
+IndexIterator BPlusTreeIndex::GetBeginIterator(GenericKey *key) { return container_.Begin(key); }
 
-IndexIterator BPlusTreeIndex::GetEndIterator() {
-  return container_.End();
-}
+IndexIterator BPlusTreeIndex::GetEndIterator() { return container_.End(); }

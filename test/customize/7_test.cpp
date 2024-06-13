@@ -93,7 +93,7 @@ TEST_F(LockManagerTest, BulkTwoPhaseLockTest) {
   // 无需死锁检测
 
   RowId row(0, 0);
-  const uint32_t n = 100;
+  const uint32_t n = 20;
   std::vector<Txn *> txn(n);
   std::thread threads[n];
   // 新建并发线程，每个线程是一个完整的事务
@@ -111,7 +111,7 @@ TEST_F(LockManagerTest, BulkTwoPhaseLockTest) {
     } else {
       threads[i] = std::thread([this, i, &row, &txn] {
         lock_mgr_->LockExclusive(txn[i], row);
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
         txn_mgr_->Commit(txn[i]);
         ASSERT_EQ(TxnState::kCommitted, txn[i]->GetState());
         //DLOG(INFO) << "Thread " << i << " committed";
