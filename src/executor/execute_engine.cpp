@@ -358,7 +358,7 @@ dberr_t ExecuteEngine::ExecuteCreateTable(pSyntaxNode ast, ExecuteContext *conte
   vector<Column*>columns;
   uint32_t index=0;
   auto list=ast->child_->next_;
-  if(list->type_!=kNodeColumnDefinitionList)
+  if(columnlist!=nullptr&&columnlist->type_==kNodeColumnList)
   {
     return DB_FAILED;
   }
@@ -646,5 +646,5 @@ dberr_t ExecuteEngine::ExecuteQuit(pSyntaxNode ast, ExecuteContext *context) {
   LOG(INFO) << "ExecuteQuit" << std::endl;
 #endif
   current_db_ = "";
-  return DB_SUCCESS;
+  return DB_QUIT;
 }
