@@ -20,7 +20,7 @@ public:
 
   bool operator!=(const TableIterator &itr) const;
 
-  const Row &operator*();
+  const Row operator*();
 
   Row *operator->();
 

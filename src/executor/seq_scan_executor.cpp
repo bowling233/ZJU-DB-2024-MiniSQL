@@ -50,18 +50,18 @@ bool SeqScanExecutor::Next(Row *row, RowId *rid) {
   auto predicate = plan_->GetPredicate();
   auto table_schema = table_info_->GetSchema();
   while (iterator_ != table_info_->GetTableHeap()->End()) {
-    auto p_row = &(*iterator_);
+    auto p_row = *iterator_;
     if (predicate != nullptr) {
-      if (!predicate->Evaluate(p_row).CompareEquals(Field(kTypeInt, 1))) {
+      if (!predicate->Evaluate(&p_row).CompareEquals(Field(kTypeInt, 1))) {
         iterator_++;
         continue;
       }
     }
     *rid = iterator_->GetRowId();
     if (!is_schema_same_) {
-      TupleTransfer(table_schema, schema_, p_row, row);
+      TupleTransfer(table_schema, schema_, &p_row, row);
     } else {
-      *row = *p_row;
+      *row = p_row;
     }
     iterator_++;
     return true;

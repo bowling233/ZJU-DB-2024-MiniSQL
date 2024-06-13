@@ -45,10 +45,10 @@ bool TableIterator::operator==(const TableIterator &itr) const {
 
 bool TableIterator::operator!=(const TableIterator &itr) const { return !(*this == itr); }
 
-const Row &TableIterator::operator*() {
-  Row *row = new Row(rid_);
-  table_heap_->GetTuple(row, txn_);
-  return *row;
+const Row TableIterator::operator*() {
+  Row row(rid_);
+  table_heap_->GetTuple(&row, txn_);
+  return row;
 }
 
 Row *TableIterator::operator->() {
