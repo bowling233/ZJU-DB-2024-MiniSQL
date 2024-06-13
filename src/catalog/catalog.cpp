@@ -83,7 +83,7 @@ CatalogManager::CatalogManager(BufferPoolManager *buffer_pool_manager, LockManag
       //对每一个表找到table_meta
       auto table_meta_page = buffer_pool_manager_->FetchPage(it.second);
       buffer_pool_manager_->UnpinPage(it.second,true);
-      TableMetadata *table_meta;
+      TableMetadata *table_meta=nullptr;
       TableMetadata::DeserializeFrom(table_meta_page->GetData(), table_meta);
       //加载table_names <std::string, table_id_t>
       table_names_[table_meta->GetTableName()] = table_meta->GetTableId();
