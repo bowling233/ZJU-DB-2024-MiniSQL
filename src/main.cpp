@@ -28,8 +28,24 @@ void InputCommand(char *input, const int len) {
   while (((eof = getchar()) != EOF) && ((ch = eof) != ';')) {
     input[i++] = ch;
   }
+  if (eof == EOF) {
+    printf("EOF Received, exit.\n");
+    exit(0);
+  }
   input[i] = ch;  // ;
   getchar();      // remove enter
+  // discard sigle line comment
+  for (int j = 0; j < i; j++) {
+    if (input[j] == '-' && input[j + 1] == '-') {
+      input[j] = '\0';
+      break;
+    }
+  }
+  if (input[0] == '\0') {
+    if(!isatty(STDIN_FILENO)) putchar('\n');
+    InputCommand(input, len);
+  } else if (!isatty(STDIN_FILENO))  // echo the command when redirected
+    printf("%s\n", input);
 }
 
 int main(int argc, char **argv) {
