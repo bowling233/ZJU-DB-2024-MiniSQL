@@ -110,6 +110,7 @@ class TablePage : public Page {
   static constexpr size_t OFFSET_TUPLE_COUNT = 20;
   static constexpr size_t OFFSET_TUPLE_OFFSET = 24;
   static constexpr size_t OFFSET_TUPLE_SIZE = 28;
+  friend class TableHeap;
 
  public:
   static constexpr size_t SIZE_MAX_ROW = PAGE_SIZE - SIZE_TABLE_PAGE_HEADER - SIZE_TUPLE;

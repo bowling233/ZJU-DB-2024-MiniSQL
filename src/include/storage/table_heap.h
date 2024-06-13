@@ -115,6 +115,8 @@ class TableHeap {
         lock_manager_(lock_manager) {
     auto page = reinterpret_cast<TablePage *>(buffer_pool_manager_->NewPage(first_page_id_));
     page->Init(first_page_id_, INVALID_PAGE_ID, log_manager_, txn);
+    page_free_space_[first_page_id_] = page->GetFreeSpaceRemaining();
+    buffer_pool_manager_->UnpinPage(first_page_id_, true);
   };
 
   explicit TableHeap(BufferPoolManager *buffer_pool_manager, page_id_t first_page_id, Schema *schema,
@@ -123,7 +125,21 @@ class TableHeap {
         first_page_id_(first_page_id),
         schema_(schema),
         log_manager_(log_manager),
-        lock_manager_(lock_manager) {}
+        lock_manager_(lock_manager) {
+    auto page = reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(first_page_id_));
+    assert(page != nullptr);
+    page_free_space_[first_page_id_] = page->GetFreeSpaceRemaining();
+    auto next_page_id = page->GetNextPageId();
+    buffer_pool_manager_->UnpinPage(first_page_id_, false);
+    // fill page_free_space_
+    while (next_page_id != INVALID_PAGE_ID) {
+      page = reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(next_page_id));
+      assert(page != nullptr);
+      page_free_space_[next_page_id] = page->GetFreeSpaceRemaining();
+      next_page_id = page->GetNextPageId();
+      buffer_pool_manager_->UnpinPage(next_page_id, false);
+    }
+  }
 
  private:
   BufferPoolManager *buffer_pool_manager_;
@@ -131,6 +147,8 @@ class TableHeap {
   Schema *schema_;
   [[maybe_unused]] LogManager *log_manager_;
   [[maybe_unused]] LockManager *lock_manager_;
+  // used to find the page to insert tuple
+  std::map<page_id_t, uint32_t> page_free_space_;
 };
 
 #endif  // MINISQL_TABLE_HEAP_H

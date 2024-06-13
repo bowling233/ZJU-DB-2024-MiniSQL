@@ -1,56 +1,50 @@
 #include "storage/table_heap.h"
 
+#include <algorithm>
+
 bool TableHeap::InsertTuple(Row &row, Txn *txn) {
   auto row_size = row.GetSerializedSize(schema_);
+  //DLOG(INFO) << "Row size: " << row_size;
   if (row_size >= PAGE_SIZE) {
-    DLOG(ERROR) << "The tuple is too large to insert.";
+    //DLOG(ERROR) << "The tuple is too large to insert.";
     return false;
   }
   // Find the page which can save the tuple.
-  page_id_t pre_page_id, page_id;
-  page_id = pre_page_id = first_page_id_;
-  while (page_id != INVALID_PAGE_ID) {
-    auto page = reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(page_id));
-    if (page == nullptr) {
-      return false;
-    }
-    // try to insert the tuple into the page.
-    page->WLatch();
-    auto inserted_ = page->InsertTuple(row, schema_, txn, lock_manager_, log_manager_);
-    page->WUnlatch();
-    buffer_pool_manager_->UnpinPage(page_id, inserted_);
-    if (inserted_) {
-      // DLOG(INFO) << "Insert tuple into page " << page_id;
-      return true;
-    }
-    // try next page
-    pre_page_id = page_id;
-    page_id = page->GetNextPageId();
-  }
-  // Create a new page
-  auto new_page = reinterpret_cast<TablePage *>(buffer_pool_manager_->NewPage(page_id));
-  if (new_page == nullptr) {
-    return false;
-  }
-  //DLOG(INFO) << "Create new page " << new_page->GetPageId();
-  // Link the new page to the previous page.
-  if (pre_page_id != INVALID_PAGE_ID) {
+  auto page = std::find_if(page_free_space_.begin(), page_free_space_.end(),
+                           [row_size](const auto &pair) { return pair.second >= row_size + TablePage::SIZE_TUPLE; });
+  TablePage *page_to_insert = nullptr;
+  if (page == page_free_space_.end()) {
+    //DLOG(INFO) << "[InsertTuple] Create a new page.";
+    // Create a new page.
+    page_id_t new_page_id;
+    auto new_page = reinterpret_cast<TablePage *>(buffer_pool_manager_->NewPage(new_page_id));
+    if (new_page == nullptr) return false;
+    // setup the new page
+    new_page->Init(new_page_id, page_free_space_.rbegin()->first, log_manager_, txn);
+    // link to the previous page
+    auto pre_page_id = page_free_space_.rbegin()->first;
     auto pre_page = reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(pre_page_id));
     pre_page->WLatch();
-    pre_page->SetNextPageId(new_page->GetPageId());
+    pre_page->SetNextPageId(new_page_id);
     pre_page->WUnlatch();
     buffer_pool_manager_->UnpinPage(pre_page_id, true);
+    page_to_insert = new_page;
+  } else {
+    //DLOG(INFO) << "[InsertTuple] Insert into existing page.";
+    page_to_insert = reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(page->first));
   }
   // Insert the tuple
-  new_page->WLatch();
-  new_page->Init(new_page->GetPageId(), pre_page_id, log_manager_, txn);  // prev linked here
-  if (!new_page->InsertTuple(row, schema_, txn, lock_manager_, log_manager_)) {
-    DLOG(ERROR) << "InsertTuple Failed";
+  //DLOG(INFO) << "Insert tuple into page " << page_to_insert->GetTablePageId();
+  page_to_insert->WLatch();
+  if (!page_to_insert->InsertTuple(row, schema_, txn, lock_manager_, log_manager_)) {
+    //DLOG(ERROR) << "InsertTuple Failed";
     return false;
   }
-  //DLOG(INFO) << "Insert tuple into page " << page_id;
-  new_page->WUnlatch();
-  buffer_pool_manager_->UnpinPage(new_page->GetPageId(), true);
+  page_to_insert->WUnlatch();
+  // Update the free space of the page.
+  page_free_space_[page_to_insert->GetTablePageId()] = page_to_insert->GetFreeSpaceRemaining();
+  //DLOG(INFO) << "Free space remaining: " << page_to_insert->GetFreeSpaceRemaining();
+  buffer_pool_manager_->UnpinPage(page_to_insert->GetPageId(), true);
   return true;
 }
 
@@ -72,7 +66,7 @@ bool TableHeap::MarkDelete(const RowId &rid, Txn *txn) {
 bool TableHeap::UpdateTuple(Row &row, const RowId &rid, Txn *txn) {
   auto row_size = row.GetSerializedSize(schema_);
   if (row_size >= PAGE_SIZE) {
-    DLOG(ERROR) << "The tuple is too large to insert.";
+    //DLOG(ERROR) << "The tuple is too large to insert.";
     return false;
   }
   auto page = reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(rid.GetPageId()));
@@ -80,9 +74,12 @@ bool TableHeap::UpdateTuple(Row &row, const RowId &rid, Txn *txn) {
   page->WLatch();
   Row old = Row(rid);
   auto updated = page->UpdateTuple(row, &old, schema_, txn, lock_manager_, log_manager_);
+  page_free_space_[page->GetTablePageId()] = page->GetFreeSpaceRemaining();
   page->WUnlatch();
   buffer_pool_manager_->UnpinPage(page->GetTablePageId(), updated);
-  if (updated) return true;
+  if (updated) {
+    return true;
+  }
   // Delete the old tuple.
   if (!MarkDelete(rid, txn)) {
     return false;
@@ -99,8 +96,30 @@ void TableHeap::ApplyDelete(const RowId &rid, Txn *txn) {
   // Apply the delete.
   page->WLatch();
   page->ApplyDelete(rid, txn, log_manager_);
+  page_free_space_[page->GetTablePageId()] = page->GetFreeSpaceRemaining();
   page->WUnlatch();
-  buffer_pool_manager_->UnpinPage(page->GetTablePageId(), true);
+  // if page is empty, delete the page
+  if (page->GetTupleCount() == 0) {
+    auto next_page_id = page->GetNextPageId();
+    auto pre_page_id = page->GetPrevPageId();
+    if (next_page_id != INVALID_PAGE_ID) {
+      auto next_page = reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(next_page_id));
+      next_page->WLatch();
+      next_page->SetPrevPageId(pre_page_id);
+      next_page->WUnlatch();
+      buffer_pool_manager_->UnpinPage(next_page_id, true);
+    }
+    if (pre_page_id != INVALID_PAGE_ID) {
+      auto pre_page = reinterpret_cast<TablePage *>(buffer_pool_manager_->FetchPage(pre_page_id));
+      pre_page->WLatch();
+      pre_page->SetNextPageId(next_page_id);
+      pre_page->WUnlatch();
+      buffer_pool_manager_->UnpinPage(pre_page_id, true);
+    }
+    buffer_pool_manager_->DeletePage(page->GetTablePageId());
+    page_free_space_.erase(page->GetTablePageId());
+  } else
+    buffer_pool_manager_->UnpinPage(page->GetTablePageId(), true);
 }
 
 void TableHeap::RollbackDelete(const RowId &rid, Txn *txn) {
