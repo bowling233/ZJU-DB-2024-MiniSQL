@@ -199,6 +199,9 @@ dberr_t ExecuteEngine::Execute(pSyntaxNode ast) {
     writer.EndInformation(result_set.size(), duration_time, false);
   }
   std::cout << writer.stream_.rdbuf();
+  // todo:: use shared_ptr for schema
+  if (ast->type_ == kNodeSelect)
+      delete planner.plan_->OutputSchema();
   return DB_SUCCESS;
 }
 

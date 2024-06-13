@@ -15,6 +15,9 @@ IndexIterator::~IndexIterator() {
     buffer_pool_manager->UnpinPage(current_page_id, false);
 }
 
+/**
+ * TODO: Student Implement
+ */
 std::pair<GenericKey *, RowId> IndexIterator::operator*() {
   if(current_page_id == INVALID_PAGE_ID) {
     throw std::out_of_range("IndexIterator out of range");
@@ -22,6 +25,9 @@ std::pair<GenericKey *, RowId> IndexIterator::operator*() {
   return std::make_pair(page->KeyAt(item_index), page->ValueAt(item_index));
 }
 
+/**
+ * TODO: Student Implement
+ */
 IndexIterator &IndexIterator::operator++() {
   if (item_index + 1 < page->GetSize()) {
     item_index++;
