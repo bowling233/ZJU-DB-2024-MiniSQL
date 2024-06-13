@@ -358,7 +358,7 @@ dberr_t ExecuteEngine::ExecuteCreateTable(pSyntaxNode ast, ExecuteContext *conte
   vector<Column*>columns;
   uint32_t index=0;
   auto list=ast->child_->next_;
-  if(columnlist!=nullptr&&columnlist->type_==kNodeColumnList)
+  if(list->type_!=kNodeColumnDefinitionList)
   {
     return DB_FAILED;
   }
@@ -372,7 +372,7 @@ dberr_t ExecuteEngine::ExecuteCreateTable(pSyntaxNode ast, ExecuteContext *conte
   {
     columnlist=columnlist->next_;
   }
-  if(columnlist->type_==kNodeColumnList)
+  if(columnlist!=nullptr&&columnlist->type_==kNodeColumnList)
   {
     auto pri=columnlist->child_;
     while(pri!=nullptr&&pri->type_==kNodeIdentifier)
