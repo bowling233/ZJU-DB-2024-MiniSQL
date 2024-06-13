@@ -103,7 +103,7 @@ TEST_F(LockManagerTest, BulkTwoPhaseLockTest) {
     if (i % 2 == 0) {
       threads[i] = std::thread([this, i, &row, &txn] {
         lock_mgr_->LockShared(txn[i], row);
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
         txn_mgr_->Commit(txn[i]);
         ASSERT_EQ(TxnState::kCommitted, txn[i]->GetState());
         //DLOG(INFO) << "Thread " << i << " committed";

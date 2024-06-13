@@ -50,7 +50,7 @@ ADD_SUBDIRECTORY(${THIRD_PARTY_DIR}/glog ${CMAKE_BINARY_DIR}/glog-build)
 # Compile options in debug mode
 SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0 -ggdb")
 SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fno-omit-frame-pointer -fno-optimize-sibling-calls")
-#SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls")
+SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls")
 if (APPLE)
     # Note: memory leak detection is not currently supported in macOS BigSur
     MESSAGE(STATUS "For macOS 10.x, you need to set ASAN_OPTIONS=detect_leaks=1 to detect memory leak.")
