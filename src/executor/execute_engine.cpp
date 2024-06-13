@@ -412,7 +412,9 @@ dberr_t ExecuteEngine::ExecuteCreateTable(pSyntaxNode ast, ExecuteContext *conte
     string index_name = "UNIQUE_";
     index_name += it + "_ON_" + table_name;
     IndexInfo *index_info;
-    catalog->CreateIndex(table_name, index_name, uniques, context->GetTransaction(), index_info, "btree");
+    std::vector<std::string> unique_index;
+    unique_index.push_back(it);
+    catalog->CreateIndex(table_name, index_name, unique_index, context->GetTransaction(), index_info, "btree");
   }
   if (primarys.size() > 0) {
     string index_name = "AUTO_CREATED_INDEX_OF_";
@@ -520,11 +522,14 @@ dberr_t ExecuteEngine::ExecuteDropIndex(pSyntaxNode ast, ExecuteContext *context
   string index_name = ast->child_->val_;
   vector<TableInfo *> tables;
   catalog->GetTables(tables);
-  auto res = DB_INDEX_NOT_FOUND;
-  for (auto it : tables) {
-    if (catalog->DropIndex(it->GetTableName(), index_name) == DB_SUCCESS) auto res = DB_SUCCESS;
-  }
-  return res;
+
+  auto table_name = std::find_if(catalog->index_names_.begin(), catalog->index_names_.end(),
+                                 [index_name](const std::pair<std::string, std::unordered_map<std::string, index_id_t>> &it) {
+                                   return it.second.find(index_name) != it.second.end();
+                                 });
+  if (table_name == catalog->index_names_.end()) return DB_INDEX_NOT_FOUND;
+  auto result = catalog->DropIndex(table_name->first, index_name);
+  return result;
 }
 
 dberr_t ExecuteEngine::ExecuteTrxBegin(pSyntaxNode ast, ExecuteContext *context) {
