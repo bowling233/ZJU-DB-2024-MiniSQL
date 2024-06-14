@@ -16,6 +16,7 @@ BufferPoolManager::BufferPoolManager(size_t pool_size, DiskManager *disk_manager
 
 BufferPoolManager::~BufferPoolManager() {
   for (auto page : page_table_) {
+    DLOG(INFO)<<"page id : "<<page.first<<" isdirty"<<pages_[page.first].is_dirty_<<endl;
     FlushPage(page.first);
   }
   delete[] pages_;
@@ -122,6 +123,7 @@ bool BufferPoolManager::UnpinPage(page_id_t page_id, bool is_dirty) {
     DLOG(ERROR) << "Page not found in page table";
     return false;
   }
+  DLOG(INFO)<<"unpin page id : "<<page_id<<" is dirty "<<is_dirty<<endl;
   frame_id_t frame_id = page_table_[page_id];
   pages_[frame_id].is_dirty_ = is_dirty;
   replacer_->Unpin(frame_id);
