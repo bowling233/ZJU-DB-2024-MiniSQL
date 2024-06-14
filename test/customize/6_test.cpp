@@ -3,6 +3,9 @@
 #include "gtest/gtest.h"
 #include "recovery/log_rec.h"
 
+//std::unordered_map<txn_id_t, lsn_t> LogRec::prev_lsn_map_ = {};
+//lsn_t LogRec::next_lsn_ = 0;
+
 class RecoveryManagerTest : public testing::Test {
  protected:
   void SetUp() override {
@@ -113,6 +116,6 @@ TEST_F(RecoveryManagerTest, UndoTest) {
   recovery_mgr.UndoPhase();
   ASSERT_EQ(db["A"], 2000);
   ASSERT_EQ(db["B"], 1000);
-  ASSERT_EQ(db["C"], 0);
-  ASSERT_EQ(db["D"], 0);
+  ASSERT_EQ(db.count("C"), 0);
+  ASSERT_EQ(db.count("D"), 0);
 }
