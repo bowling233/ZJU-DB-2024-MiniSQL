@@ -56,7 +56,7 @@ int main(int argc, char **argv) {
   // executor engine
   ExecuteEngine engine;
   // for print syntax tree
-  TreeFileManagers syntax_tree_file_mgr("syntax_tree_");
+  // TreeFileManagers syntax_tree_file_mgr("syntax_tree_");
   uint32_t syntax_tree_id = 0;
 
   while (1) {
@@ -83,8 +83,8 @@ int main(int argc, char **argv) {
     } else {
       // Comment them out if you don't need to debug the syntax tree
       // printf("[INFO] Sql syntax parse ok!\n");
-      SyntaxTreePrinter printer(MinisqlGetParserRootNode());
-      printer.PrintTree(syntax_tree_file_mgr[syntax_tree_id++]);
+      // SyntaxTreePrinter printer(MinisqlGetParserRootNode());
+      // printer.PrintTree(syntax_tree_file_mgr[syntax_tree_id++]);
     }
 
     auto result = engine.Execute(MinisqlGetParserRootNode());
